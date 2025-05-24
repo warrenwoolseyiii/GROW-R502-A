@@ -1,0 +1,57 @@
+#ifndef FINGERPRINT_SENSOR_HPP
+#define FINGERPRINT_SENSOR_HPP
+
+#include <stdint.h> // Using C-style header for types
+#include <vector>   // For std::vector
+#include <cstddef>  // For std::size_t (often included by vector)
+
+
+// Assuming the C driver header is accessible for UART function pointer types
+// and potentially other definitions if we decide to wrap it.
+// For now, we'll redefine the function pointers for clarity within the C++ context,
+// or ensure the C header is C++ compatible.
+// Let's assume C header is C++ compatible (uses extern "C" if needed, or is C-like).
+#include "../C/r502a_driver.h" // For r502a_uart_write_fn, r502a_uart_read_fn, and status codes
+
+namespace Grow {
+
+class FingerprintSensor {
+public:
+    FingerprintSensor(uint32_t device_address,
+                      r502a_uart_write_fn write_uart_fn,
+                      r502a_uart_read_fn read_uart_fn);
+
+    // Initialize the sensor handle (can be called implicitly by constructor or explicitly)
+    uint8_t init();
+
+    // --- Basic Commands ---
+    uint8_t handshake();
+    uint8_t verifyPassword(uint32_t password);
+    uint8_t readSystemParameters(r502a_system_params_t& params); // Using C struct for now
+    uint8_t getImageExtended();
+    uint8_t generateCharacterFile(uint8_t buffer_id);
+    uint8_t generateTemplate();
+    uint8_t storeTemplate(uint8_t buffer_id, uint16_t model_id);
+    uint8_t searchFingerprint(uint8_t buffer_id, uint16_t start_page, uint16_t num_pages, r502a_search_result_t& result);
+    uint8_t deleteTemplate(uint16_t start_page, uint16_t num_to_delete);
+    uint8_t emptyFingerprintLibrary();
+
+    // Potentially add methods for data transfer commands like UpImage, DownImage, UpChar, DownChar later.
+
+private:
+    r502a_handle_t sensor_handle_; // Use the C handle internally
+    bool initialized_;
+
+    // Internal helper to wrap send_command_and_receive_ack or re-implement packet logic
+    uint8_t sendCommandAndReceiveAck(uint8_t cmd_code,
+                                     const std::vector<uint8_t>& params,
+                                     std::vector<uint8_t>* ack_params_data);
+    
+    // Helper to calculate checksum (could be static or in a utility namespace)
+    static uint16_t calculateChecksum(const uint8_t* buffer, uint16_t length);
+
+}; // class FingerprintSensor
+
+} // namespace Grow
+
+#endif // FINGERPRINT_SENSOR_HPP

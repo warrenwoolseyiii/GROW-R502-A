@@ -1,0 +1,230 @@
+#ifndef R502A_DRIVER_H
+#define R502A_DRIVER_H
+
+#include <stdint.h>
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// --- Constants ---
+// Packet Structure
+#define R502A_PACKET_HEADER_HIGH 0xEF
+#define R502A_PACKET_HEADER_LOW  0x01
+#define R502A_DEFAULT_ADDRESS    0xFFFFFFFF
+
+// Packet Identifiers (PID)
+#define R502A_PID_COMMAND        0x01 // Command packet
+#define R502A_PID_DATA           0x02 // Data packet
+#define R502A_PID_ACK            0x07 // Acknowledge packet
+#define R502A_PID_END_DATA       0x08 // End of Data packet
+
+// Command Codes (InstructionTable from datasheet pg 9)
+#define R502A_CMD_HANDSHAKE      0x40
+#define R502A_CMD_READ_SYS_PARA  0x0F
+#define R502A_CMD_VFY_PWD        0x13
+#define R502A_CMD_GET_IMG_EX     0x28
+#define R502A_CMD_GEN_CHAR       0x02
+#define R502A_CMD_REG_MODEL      0x05
+#define R502A_CMD_STORE          0x06
+#define R502A_CMD_SEARCH         0x04
+#define R502A_CMD_DELETE_CHAR    0x0C
+#define R502A_CMD_EMPTY          0x0D
+// ... (add more as needed)
+
+// Confirmation Codes (Datasheet pg 9-10)
+#define R502A_CONF_OK            0x00 // Command execution complete
+#define R502A_CONF_ERR_RECV      0x01 // Error when receiving data package
+#define R502A_CONF_NO_FINGER     0x02 // No finger on the sensor
+#define R502A_CONF_FAIL_ENROLL   0x03 // Fail to enroll the finger
+#define R502A_CONF_FAIL_GEN_CHAR_DISORDERLY 0x06 // Fail to generate char file due to disorderly image
+#define R502A_CONF_FAIL_GEN_CHAR_SMALL_POINT 0x07 // Fail to generate char file due to lackness of char point or smallness
+#define R502A_CONF_FINGER_NOMATCH 0x08 // Finger doesn't match
+#define R502A_CONF_FAIL_FIND_MATCH 0x09 // Fail to find the matching finger
+#define R502A_CONF_FAIL_COMBINE  0x0A // Fail to combine the character files
+#define R502A_CONF_ADDR_BEYOND_LIB 0x0B // Addressing PageID is beyond the finger library
+#define R502A_CONF_ERR_READ_TEMPLATE 0x0C // Error when reading template from library or template is invalid
+#define R502A_CONF_ERR_UPLOAD_TEMPLATE 0x0D // Error when uploading template
+#define R502A_CONF_ERR_RECV_FOLLOWING_DATA 0x0E // Module can't receive the following data packages
+#define R502A_CONF_ERR_UPLOAD_IMAGE 0x0F // Error when uploading image
+#define R502A_CONF_FAIL_DELETE_TEMPLATE 0x10 // Fail to delete the template
+#define R502A_CONF_FAIL_CLEAR_LIB 0x11 // Fail to clear finger library
+#define R502A_CONF_PWD_FAIL      0x13 // Wrong password!
+#define R502A_CONF_FAIL_GEN_IMAGE_NO_PRIMARY 0x15 // Fail to generate image for lackness of valid primary image
+#define R502A_CONF_ERR_WRITE_FLASH 0x18 // Error when writing flash
+#define R502A_CONF_TIMEOUT       0x26 // Timeout
+// ... (add more error codes as implemented)
+
+
+// --- UART Function Pointers ---
+/**
+ * @brief Typedef for the UART write function.
+ * @param data Pointer to the data buffer to write.
+ * @param length Number of bytes to write.
+ * @return 0 on success, non-zero on failure.
+ */
+typedef int (*r502a_uart_write_fn)(const uint8_t* data, uint16_t length);
+
+/**
+ * @brief Typedef for the UART read function.
+ * @param buffer Pointer to the buffer to store read data.
+ * @param length Number of bytes to read.
+ * @param timeout_ms Timeout in milliseconds for the read operation.
+ * @return Number of bytes read, or -1 on timeout/error.
+ */
+typedef int (*r502a_uart_read_fn)(uint8_t* buffer, uint16_t length, uint32_t timeout_ms);
+
+// --- Structures ---
+typedef struct {
+    uint32_t device_address;
+    r502a_uart_write_fn write_uart;
+    r502a_uart_read_fn read_uart;
+    // Potentially add a user_data pointer if needed for uart functions
+    // void* user_uart_data;
+} r502a_handle_t;
+
+typedef struct {
+    uint16_t status_register;
+    uint16_t system_identifier_code; // Should be 0x0000
+    uint16_t finger_library_size;
+    uint16_t security_level;         // 1-5
+    uint32_t device_address;         // The address stored in the module
+    uint16_t data_packet_size_code;  // 0:32, 1:64, 2:128, 3:256 bytes
+    uint16_t baud_rate_N;            // Baud = 9600 * N
+} r502a_system_params_t;
+
+typedef struct {
+    uint16_t page_id;    // Template number found
+    uint16_t match_score; // Matching score
+} r502a_search_result_t;
+
+// --- Public API ---
+
+/**
+ * @brief Initializes the R502-A fingerprint sensor module handle.
+ *
+ * @param handle Pointer to the r502a_handle_t structure to initialize.
+ * @param device_addr The 4-byte device address (default is 0xFFFFFFFF).
+ * @param write_func Pointer to the user-provided UART write function.
+ * @param read_func Pointer to the user-provided UART read function.
+ * @return R502A_CONF_OK on success, or an error code.
+ */
+uint8_t r502a_init(r502a_handle_t* handle, uint32_t device_addr,
+                   r502a_uart_write_fn write_func, r502a_uart_read_fn read_func);
+
+/**
+ * @brief Sends a HandShake command to the module.
+ *
+ * @param handle Pointer to the initialized r502a_handle_t structure.
+ * @return R502A_CONF_OK if handshake is successful, otherwise an error/confirmation code.
+ */
+uint8_t r502a_handshake(r502a_handle_t* handle);
+
+// Add other function prototypes here as they are implemented, e.g.:
+
+/**
+ * @brief Verifies the module's handshake password.
+ *
+ * @param handle Pointer to the initialized r502a_handle_t structure.
+ * @param password The 4-byte password to verify.
+ * @return R502A_CONF_OK if password is correct, R502A_CONF_PWD_FAIL if incorrect,
+ *         or another error/confirmation code.
+ */
+uint8_t r502a_verify_password(r502a_handle_t* handle, uint32_t password);
+
+/**
+ * @brief Collects a fingerprint image (extended version).
+ *        Detects a finger and stores the image in the module's ImageBuffer.
+ *        This version provides more detailed feedback on image quality.
+ *
+ * @param handle Pointer to the initialized r502a_handle_t structure.
+ * @return R502A_CONF_OK if image collection is successful,
+ *         R502A_CONF_NO_FINGER if no finger is detected,
+ *         or another error/confirmation code (e.g., for poor image quality).
+ */
+uint8_t r502a_get_image_extended(r502a_handle_t* handle);
+
+/**
+ * @brief Generates a character file from the image in ImageBuffer and stores it
+ *        in the specified CharBuffer.
+ *
+ * @param handle Pointer to the initialized r502a_handle_t structure.
+ * @param buffer_id The CharBuffer ID (1-6) where the character file will be stored.
+ * @return R502A_CONF_OK if successful, or an error/confirmation code.
+ */
+uint8_t r502a_generate_character_file(r502a_handle_t* handle, uint8_t buffer_id);
+
+/**
+ * @brief Combines character files (e.g., from CharBuffer1 and CharBuffer2)
+ *        to generate a template. The template is stored back in CharBuffer1 and CharBuffer2.
+ *
+ * @param handle Pointer to the initialized r502a_handle_t structure.
+ * @return R502A_CONF_OK if successful, R502A_CONF_FAIL_COMBINE (0x0a) if character
+ *         files don't belong to the same finger, or another error/confirmation code.
+ */
+uint8_t r502a_generate_template(r502a_handle_t* handle);
+
+/**
+ * @brief Stores the template from the specified buffer (CharBuffer1, as per datasheet note)
+ *        at the designated location (ModelID) in the Flash library.
+ *
+ * @param handle Pointer to the initialized r502a_handle_t structure.
+ * @param buffer_id The CharBuffer ID from which to take the template (datasheet note suggests 0x01).
+ * @param model_id The location/page ID (0-N, where N is library capacity) to store the template.
+ * @return R502A_CONF_OK if successful, R502A_CONF_ADDR_BEYOND_LIB if model_id is out of range,
+ *         R502A_CONF_ERR_WRITE_FLASH on flash error, or another error/confirmation code.
+ */
+uint8_t r502a_store_template(r502a_handle_t* handle, uint8_t buffer_id, uint16_t model_id);
+
+/**
+ * @brief Searches the finger library for a template matching the one in CharBufferID,
+ *        within a specified range.
+ *
+ * @param handle Pointer to the initialized r502a_handle_t structure.
+ * @param buffer_id The CharBuffer ID (e.g., 0x01) containing the template to search for.
+ * @param start_page The starting page ID in the library to search from.
+ * @param num_pages The number of pages/templates to search.
+ * @param result Pointer to a r502a_search_result_t structure to store the found PageID and MatchScore.
+ * @return R502A_CONF_OK if a match is found, R502A_CONF_FAIL_FIND_MATCH if no match,
+ *         or another error/confirmation code.
+ */
+uint8_t r502a_search_fingerprint(r502a_handle_t* handle, uint8_t buffer_id,
+                                 uint16_t start_page, uint16_t num_pages,
+                                 r502a_search_result_t* result);
+
+/**
+ * @brief Deletes a specified number of templates from the Flash library,
+ *        starting from a given PageID.
+ *
+ * @param handle Pointer to the initialized r502a_handle_t structure.
+ * @param start_page The starting PageID from which to delete templates.
+ * @param num_to_delete The number of templates to delete.
+ * @return R502A_CONF_OK if successful, R502A_CONF_FAIL_DELETE_TEMPLATE if failed,
+ *         or another error/confirmation code.
+ */
+uint8_t r502a_delete_template(r502a_handle_t* handle, uint16_t start_page, uint16_t num_to_delete);
+
+/**
+ * @brief Deletes all templates from the Flash fingerprint library.
+ *
+ * @param handle Pointer to the initialized r502a_handle_t structure.
+ * @return R502A_CONF_OK if successful, R502A_CONF_FAIL_CLEAR_LIB if failed,
+ *         or another error/confirmation code.
+ */
+uint8_t r502a_empty_fingerprint_library(r502a_handle_t* handle);
+
+/**
+ * @brief Reads the system parameters from the module.
+ *
+ * @param handle Pointer to the initialized r502a_handle_t structure.
+ * @param params Pointer to a r502a_system_params_t structure to store the parameters.
+ * @return R502A_CONF_OK if successful, otherwise an error/confirmation code.
+ */
+uint8_t r502a_read_system_parameters(r502a_handle_t* handle, r502a_system_params_t* params);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
+
+#endif // R502A_DRIVER_H

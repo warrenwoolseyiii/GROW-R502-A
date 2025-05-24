@@ -1,0 +1,3 @@
+# Output directories and files
+examples/C/build
+examples/Cpp/build/
