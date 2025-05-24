@@ -53,8 +53,21 @@ extern "C" {
 #define R502A_CONF_PWD_FAIL      0x13 // Wrong password!
 #define R502A_CONF_FAIL_GEN_IMAGE_NO_PRIMARY 0x15 // Fail to generate image for lackness of valid primary image
 #define R502A_CONF_ERR_WRITE_FLASH 0x18 // Error when writing flash
-#define R502A_CONF_TIMEOUT       0x26 // Timeout
+#define R502A_CONF_TIMEOUT       0x26 // Timeout (from sensor or driver)
 // ... (add more error codes as implemented)
+
+// --- Driver-Specific Error Codes (distinct from sensor confirmation codes) ---
+// These are typically returned by the driver when an operation fails before
+// or during communication, or if the handle is invalid.
+// Using a higher range to distinguish.
+#define R502A_ERR_NOT_INITIALIZED     0xF0 // Handle not initialized or UART functions missing
+#define R502A_ERR_UART_WRITE_FAIL     0xF1 // UART write function failed
+#define R502A_ERR_UART_READ_FAIL      0xF2 // UART read function failed (generic, distinct from sensor timeout)
+#define R502A_ERR_INVALID_ACK_PACKET  0xF3 // Received packet is not a valid ACK packet (header, PID, etc.)
+#define R502A_ERR_ACK_CHECKSUM_FAIL   0xF4 // Received ACK packet checksum mismatch
+#define R502A_ERR_ACK_UNEXPECTED_LEN  0xF5 // ACK packet has an unexpected number of parameters
+#define R502A_ERR_MALLOC_FAIL         0xF6 // Memory allocation failed (if dynamic memory were used)
+#define R502A_ERR_INVALID_ARGS        0xF7 // Invalid arguments passed to a driver function
 
 
 // --- UART Function Pointers ---
@@ -222,6 +235,14 @@ uint8_t r502a_empty_fingerprint_library(r502a_handle_t* handle);
  * @return R502A_CONF_OK if successful, otherwise an error/confirmation code.
  */
 uint8_t r502a_read_system_parameters(r502a_handle_t* handle, r502a_system_params_t* params);
+
+/**
+ * @brief Converts an R502-A confirmation or driver error code to a human-readable string.
+ *
+ * @param error_code The error code (either a sensor confirmation code or a driver-specific R502A_ERR_ code).
+ * @return A constant string describing the error code. Returns "Unknown error code" if not recognized.
+ */
+const char* r502a_error_code_to_string(uint8_t error_code);
 
 #ifdef __cplusplus
 } // extern "C"

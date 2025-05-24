@@ -189,7 +189,7 @@ int main(int argc, char* argv[]) {
     uint8_t ret = sensor.init(); // Initialize (checks UART functions)
     if (ret != R502A_CONF_OK) {
         std::cerr << "Failed to initialize FingerprintSensor object: 0x"
-                  << std::hex << (int)ret << std::endl;
+                  << std::hex << (int)ret << " (" << Grow::FingerprintSensor::errorCodeToString(ret) << ")" << std::endl;
         uart_posix_close_cpp();
         return 1;
     }
@@ -199,69 +199,56 @@ int main(int argc, char* argv[]) {
     if (strcmp(command_str, "handshake") == 0) {
         ret = sensor.handshake();
         std::cout << "Handshake result: 0x" << std::hex << (int)ret
-                  << " (" << (ret == R502A_CONF_OK ? "OK" : "FAIL") << ")" << std::endl;
+                  << " (" << Grow::FingerprintSensor::errorCodeToString(ret) << ")" << std::endl;
     } else if (strcmp(command_str, "readparams") == 0) {
         r502a_system_params_t params; // Using the C struct
         ret = sensor.readSystemParameters(params);
         std::cout << "Read System Parameters result: 0x" << std::hex << (int)ret
-                  << " (" << (ret == R502A_CONF_OK ? "OK" : "FAIL") << ")" << std::endl;
+                  << " (" << Grow::FingerprintSensor::errorCodeToString(ret) << ")" << std::endl;
         if (ret == R502A_CONF_OK) {
             print_system_params_cpp(params);
         }
     } else if (strcmp(command_str, "verifypwd") == 0) {
         if (argc < 4) {
             std::cerr << "Usage: " << argv[0] << " " << port << " verifypwd <password_hex_4_bytes>\n";
-            ret = 0xFF;
+            ret = R502A_ERR_INVALID_ARGS;
         } else {
             uint32_t password = (uint32_t)strtoul(argv[3], NULL, 16);
             std::cout << "Verifying password: 0x" << std::hex << std::setw(8) << std::setfill('0') << password << std::endl;
             ret = sensor.verifyPassword(password);
             std::cout << "Verify Password result: 0x" << std::hex << (int)ret
-                      << " (" << (ret == R502A_CONF_OK ? "OK" : (ret == R502A_CONF_PWD_FAIL ? "WRONG_PWD" : "FAIL"))
-                      << ")" << std::endl;
+                      << " (" << Grow::FingerprintSensor::errorCodeToString(ret) << ")" << std::endl;
         }
     } else if (strcmp(command_str, "getimage") == 0) {
         std::cout << "Attempting to get image (GetImageEx)..." << std::endl;
         ret = sensor.getImageExtended();
-        std::cout << "Get Image Extended result: 0x" << std::hex << (int)ret << " (";
-        switch(ret) {
-            case R502A_CONF_OK: std::cout << "OK"; break;
-            case R502A_CONF_NO_FINGER: std::cout << "NO_FINGER"; break;
-            case R502A_CONF_FAIL_ENROLL: std::cout << "FAIL_COLLECT"; break;
-            case R502A_CONF_FAIL_GEN_CHAR_SMALL_POINT: std::cout << "POOR_IMAGE_QUALITY"; break;
-            default: std::cout << "FAIL/OTHER"; break;
-        }
-        std::cout << ")" << std::endl;
+        std::cout << "Get Image Extended result: 0x" << std::hex << (int)ret
+                  << " (" << Grow::FingerprintSensor::errorCodeToString(ret) << ")" << std::endl;
     } else if (strcmp(command_str, "genchar") == 0) {
         if (argc < 4) {
             std::cerr << "Usage: " << argv[0] << " " << port << " genchar <buffer_id(1-6)>\n";
-            ret = 0xFF;
+            ret = R502A_ERR_INVALID_ARGS;
         } else {
             uint8_t buffer_id = (uint8_t)atoi(argv[3]);
-            if (buffer_id < 1 || buffer_id > 6) {
-                std::cerr << "Invalid buffer_id. Must be 1-6.\n";
-                ret = 0xFF;
-            } else {
-                std::cout << "Generating character file in buffer " << (int)buffer_id << "...\n";
-                ret = sensor.generateCharacterFile(buffer_id);
-                std::cout << "Generate Character File result: 0x" << std::hex << (int)ret << " (";
-                 switch(ret) {
-                    case R502A_CONF_OK: std::cout << "OK"; break;
-                    case R502A_CONF_FAIL_GEN_CHAR_DISORDERLY: std::cout << "FAIL_DISORDERLY_IMG"; break;
-                    case R502A_CONF_FAIL_GEN_CHAR_SMALL_POINT: std::cout << "FAIL_SMALL_POINT_IMG"; break;
-                    case R502A_CONF_FAIL_GEN_IMAGE_NO_PRIMARY: std::cout << "FAIL_NO_PRIMARY_IMG"; break;
-                    default: std::cout << "FAIL/OTHER"; break;
-                }
-                std::cout << ")" << std::endl;
-            }
+            // The C++ wrapper calls the C function which now validates buffer_id
+            std::cout << "Generating character file in buffer " << (int)buffer_id << "...\n";
+            ret = sensor.generateCharacterFile(buffer_id);
+            std::cout << "Generate Character File result: 0x" << std::hex << (int)ret
+                      << " (" << Grow::FingerprintSensor::errorCodeToString(ret) << ")" << std::endl;
         }
     }
     // Add other command handlers here
     else {
         std::cerr << "Unknown command: " << command_str << std::endl;
-        ret = 1;
+        ret = R502A_ERR_INVALID_ARGS; // Using a driver error code for unknown app command
     }
 
     uart_posix_close_cpp();
-    return (ret == R502A_CONF_OK || ret == 0) ? 0 : 1;
+    // Adjust return logic: 0 for R502A_CONF_OK, 1 for any other driver/sensor code.
+    // The initial `ret = 0xFF` or `ret = 1` for arg errors should also lead to exit 1.
+    if (ret == R502A_ERR_INVALID_ARGS && (strcmp(command_str, "verifypwd") == 0 || strcmp(command_str, "genchar") == 0 || strcmp(command_str, "unknown") == 0) ) {
+         // For arg errors detected in main before calling driver, or unknown command
+         return 1;
+    }
+    return (ret == R502A_CONF_OK) ? 0 : 1;
 }

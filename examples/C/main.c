@@ -185,7 +185,7 @@ int main(int argc, char* argv[]) {
     r502a_handle_t sensor_handle;
     uint8_t ret = r502a_init(&sensor_handle, R502A_DEFAULT_ADDRESS, uart_posix_write, uart_posix_read);
     if (ret != R502A_CONF_OK) {
-        fprintf(stderr, "Failed to initialize R502-A driver: 0x%02X\n", ret);
+        fprintf(stderr, "Failed to initialize R502-A driver: 0x%02X (%s)\n", ret, r502a_error_code_to_string(ret));
         uart_posix_close();
         return 1;
     }
@@ -194,58 +194,38 @@ int main(int argc, char* argv[]) {
 
     if (strcmp(command, "handshake") == 0) {
         ret = r502a_handshake(&sensor_handle);
-        printf("Handshake result: 0x%02X (%s)\n", ret, (ret == R502A_CONF_OK) ? "OK" : "FAIL");
+        printf("Handshake result: 0x%02X (%s)\n", ret, r502a_error_code_to_string(ret));
     } else if (strcmp(command, "readparams") == 0) {
         r502a_system_params_t params;
         ret = r502a_read_system_parameters(&sensor_handle, &params);
-        printf("Read System Parameters result: 0x%02X (%s)\n", ret, (ret == R502A_CONF_OK) ? "OK" : "FAIL");
+        printf("Read System Parameters result: 0x%02X (%s)\n", ret, r502a_error_code_to_string(ret));
         if (ret == R502A_CONF_OK) {
             print_system_params(&params);
         }
     } else if (strcmp(command, "verifypwd") == 0) {
         if (argc < 4) {
             fprintf(stderr, "Usage: %s %s verifypwd <password_hex_4_bytes>\n", argv[0], port);
-            ret = 0xFF; // Indicate error
+            ret = R502A_ERR_INVALID_ARGS;
         } else {
             uint32_t password = (uint32_t)strtoul(argv[3], NULL, 16);
             printf("Verifying password: 0x%08X\n", password);
             ret = r502a_verify_password(&sensor_handle, password);
-            printf("Verify Password result: 0x%02X (%s)\n", ret, (ret == R502A_CONF_OK) ? "OK" : (ret == R502A_CONF_PWD_FAIL ? "WRONG_PWD" : "FAIL"));
+            printf("Verify Password result: 0x%02X (%s)\n", ret, r502a_error_code_to_string(ret));
         }
     } else if (strcmp(command, "getimage") == 0) {
         printf("Attempting to get image (GetImageEx)...\n");
         ret = r502a_get_image_extended(&sensor_handle);
-        printf("Get Image Extended result: 0x%02X (", ret);
-        switch(ret) {
-            case R502A_CONF_OK: printf("OK"); break;
-            case R502A_CONF_NO_FINGER: printf("NO_FINGER"); break;
-            case R502A_CONF_FAIL_ENROLL: printf("FAIL_COLLECT"); break; // 0x03 is also fail to enroll
-            case R502A_CONF_FAIL_GEN_CHAR_SMALL_POINT: printf("POOR_IMAGE_QUALITY"); break; // 0x07 is also this for GetImageEx
-            default: printf("FAIL/OTHER"); break;
-        }
-        printf(")\n");
+        printf("Get Image Extended result: 0x%02X (%s)\n", ret, r502a_error_code_to_string(ret));
     } else if (strcmp(command, "genchar") == 0) {
         if (argc < 4) {
             fprintf(stderr, "Usage: %s %s genchar <buffer_id(1-6)>\n", argv[0], port);
-            ret = 0xFF;
+            ret = R502A_ERR_INVALID_ARGS;
         } else {
             uint8_t buffer_id = (uint8_t)atoi(argv[3]);
-            if (buffer_id < 1 || buffer_id > 6) {
-                fprintf(stderr, "Invalid buffer_id. Must be 1-6.\n");
-                ret = 0xFF;
-            } else {
-                printf("Generating character file in buffer %u...\n", buffer_id);
-                ret = r502a_generate_character_file(&sensor_handle, buffer_id);
-                printf("Generate Character File result: 0x%02X (", ret);
-                 switch(ret) {
-                    case R502A_CONF_OK: printf("OK"); break;
-                    case R502A_CONF_FAIL_GEN_CHAR_DISORDERLY: printf("FAIL_DISORDERLY_IMG"); break;
-                    case R502A_CONF_FAIL_GEN_CHAR_SMALL_POINT: printf("FAIL_SMALL_POINT_IMG"); break;
-                    case R502A_CONF_FAIL_GEN_IMAGE_NO_PRIMARY: printf("FAIL_NO_PRIMARY_IMG"); break;
-                    default: printf("FAIL/OTHER"); break;
-                }
-                printf(")\n");
-            }
+            // The r502a_generate_character_file function now checks buffer_id validity.
+            printf("Generating character file in buffer %u...\n", buffer_id);
+            ret = r502a_generate_character_file(&sensor_handle, buffer_id);
+            printf("Generate Character File result: 0x%02X (%s)\n", ret, r502a_error_code_to_string(ret));
         }
     }
     // Add other command handlers here:
@@ -256,9 +236,15 @@ int main(int argc, char* argv[]) {
     // else if (strcmp(command, "empty") == 0) { ... }
     else {
         fprintf(stderr, "Unknown command: %s\n", command);
-        ret = 1;
+        ret = R502A_ERR_INVALID_ARGS; // Using a driver error code for unknown app command
     }
 
     uart_posix_close();
-    return (ret == R502A_CONF_OK || ret == 0) ? 0 : 1; // Ensure 0 for shell success on OK
+    // Adjust return logic: 0 for R502A_CONF_OK, 1 for any other driver/sensor code.
+    // The initial `ret = 0xFF` or `ret = 1` for arg errors should also lead to exit 1.
+    if (ret == R502A_ERR_INVALID_ARGS && (strcmp(command, "verifypwd") == 0 || strcmp(command, "genchar") == 0 || strcmp(command, "unknown") == 0) ) {
+         // For arg errors detected in main before calling driver, or unknown command
+         return 1;
+    }
+    return (ret == R502A_CONF_OK) ? 0 : 1;
 }

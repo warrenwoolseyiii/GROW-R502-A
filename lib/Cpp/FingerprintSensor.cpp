@@ -91,6 +91,10 @@ uint8_t FingerprintSensor::emptyFingerprintLibrary() {
     return r502a_empty_fingerprint_library(&sensor_handle_);
 }
 
+const char* FingerprintSensor::errorCodeToString(uint8_t errorCode) {
+    return r502a_error_code_to_string(errorCode);
+}
+
 // Re-implementing packet logic or a C++ specific helper would go here if not wrapping C.
 // For now, the C functions are self-contained enough.
 // uint16_t FingerprintSensor::calculateChecksum(const uint8_t* buffer, uint16_t length) {

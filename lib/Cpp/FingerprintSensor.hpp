@@ -38,6 +38,15 @@ public:
 
     // Potentially add methods for data transfer commands like UpImage, DownImage, UpChar, DownChar later.
 
+    // --- Utility ---
+    /**
+     * @brief Converts an R502-A confirmation or driver error code to a human-readable string.
+     * This is a static wrapper around the C driver's r502a_error_code_to_string function.
+     * @param errorCode The error code from the sensor or C driver.
+     * @return A constant string describing the error code.
+     */
+    static const char* errorCodeToString(uint8_t errorCode);
+
 private:
     r502a_handle_t sensor_handle_; // Use the C handle internally
     bool initialized_;
