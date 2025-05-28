@@ -28,10 +28,7 @@ public:
     uint8_t handshake();
     uint8_t verifyPassword(uint32_t password);
     uint8_t readSystemParameters(r502a_system_params_t& params); // Using C struct for now
-    uint8_t getImageExtended();
-    uint8_t generateCharacterFile(uint8_t buffer_id);
-    uint8_t generateTemplate();
-    uint8_t storeTemplate(uint8_t buffer_id, uint16_t model_id);
+    // Old enrollment functions removed, new ones below
     uint8_t searchFingerprint(uint8_t buffer_id, uint16_t start_page, uint16_t num_pages, r502a_search_result_t& result);
     uint8_t deleteTemplate(uint16_t start_page, uint16_t num_to_delete);
     uint8_t emptyFingerprintLibrary();
@@ -46,6 +43,48 @@ public:
      * @return A constant string describing the error code.
      */
     static const char* errorCodeToString(uint8_t errorCode);
+
+    // --- New Enrollment Functions ---
+    /**
+     * @brief Collects a fingerprint image from the sensor and stores it in the sensor's ImageBuffer.
+     *
+     * @param confirmationCode Pointer to store the confirmation code from the sensor.
+     * @return R502A_CONF_OK on successful driver operation (check confirmationCode for sensor status),
+     *         or a driver-level error code on failure.
+     */
+    uint8_t generateImage(uint8_t* confirmationCode);
+
+    /**
+     * @brief Generates a character file (template) from the fingerprint image in ImageBuffer
+     *        and stores it in CharBuffer1 or CharBuffer2.
+     *
+     * @param bufferId The character buffer to store the generated template (R502A_CHAR_BUFFER_1 or R502A_CHAR_BUFFER_2).
+     * @param confirmationCode Pointer to store the confirmation code from the sensor.
+     * @return R502A_CONF_OK on successful driver operation (check confirmationCode for sensor status),
+     *         or a driver-level error code on failure.
+     */
+    uint8_t imageToTemplate(uint8_t bufferId, uint8_t* confirmationCode);
+
+    /**
+     * @brief Combines character files from CharBuffer1 and CharBuffer2 to generate a template.
+     *
+     * @param confirmationCode Pointer to store the confirmation code from the sensor.
+     * @return R502A_CONF_OK on successful driver operation (check confirmationCode for sensor status),
+     *         or a driver-level error code on failure.
+     */
+    uint8_t createTemplate(uint8_t* confirmationCode);
+
+    /**
+     * @brief Stores the template from CharBuffer1 or CharBuffer2 into a specified pageID
+     *        in the fingerprint library.
+     *
+     * @param bufferId The character buffer containing the template (R502A_CHAR_BUFFER_1 or R502A_CHAR_BUFFER_2).
+     * @param pageId The page ID where the template will be stored.
+     * @param confirmationCode Pointer to store the confirmation code from the sensor.
+     * @return R502A_CONF_OK on successful driver operation (check confirmationCode for sensor status),
+     *         or a driver-level error code on failure.
+     */
+    uint8_t storeTemplate(uint8_t bufferId, uint16_t pageId, uint8_t* confirmationCode);
 
 private:
     r502a_handle_t sensor_handle_; // Use the C handle internally

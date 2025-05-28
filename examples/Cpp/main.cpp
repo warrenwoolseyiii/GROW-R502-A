@@ -170,8 +170,10 @@ int main(int argc, char* argv[]) {
                   << "  handshake\n"
                   << "  readparams\n"
                   << "  verifypwd <password_hex>\n"
-                  << "  getimage\n"
-                  << "  genchar <buffer_id(1-6)>\n"
+                  << "  getimage (calls FingerprintSensor::generateImage)\n"
+                  << "  img2tz <buffer_id(1 or 2)> (calls FingerprintSensor::imageToTemplate)\n"
+                  << "  createtpl (calls FingerprintSensor::createTemplate)\n"
+                  << "  storetpl <buffer_id(1 or 2)> <page_id> (calls FingerprintSensor::storeTemplate)\n"
                   // Add more commands
                   << std::endl;
         return 1;
@@ -220,21 +222,70 @@ int main(int argc, char* argv[]) {
                       << " (" << Grow::FingerprintSensor::errorCodeToString(ret) << ")" << std::endl;
         }
     } else if (strcmp(command_str, "getimage") == 0) {
-        std::cout << "Attempting to get image (GetImageEx)..." << std::endl;
-        ret = sensor.getImageExtended();
-        std::cout << "Get Image Extended result: 0x" << std::hex << (int)ret
-                  << " (" << Grow::FingerprintSensor::errorCodeToString(ret) << ")" << std::endl;
-    } else if (strcmp(command_str, "genchar") == 0) {
+        std::cout << "Attempting to generate image (calls FingerprintSensor::generateImage)..." << std::endl;
+        uint8_t sensor_confirmation_code;
+        uint8_t driver_status = sensor.generateImage(&sensor_confirmation_code);
+        if (driver_status == R502A_CONF_OK) {
+            std::cout << "Generate Image - Sensor response: 0x" << std::hex << (int)sensor_confirmation_code
+                      << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
+            ret = sensor_confirmation_code;
+        } else {
+            std::cout << "Generate Image - Driver error: 0x" << std::hex << (int)driver_status
+                      << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status) << ")" << std::endl;
+            ret = driver_status;
+        }
+    } else if (strcmp(command_str, "img2tz") == 0) {
         if (argc < 4) {
-            std::cerr << "Usage: " << argv[0] << " " << port << " genchar <buffer_id(1-6)>\n";
+            std::cerr << "Usage: " << argv[0] << " " << port << " img2tz <buffer_id(1 or 2)>\n";
             ret = R502A_ERR_INVALID_ARGS;
         } else {
             uint8_t buffer_id = (uint8_t)atoi(argv[3]);
-            // The C++ wrapper calls the C function which now validates buffer_id
-            std::cout << "Generating character file in buffer " << (int)buffer_id << "...\n";
-            ret = sensor.generateCharacterFile(buffer_id);
-            std::cout << "Generate Character File result: 0x" << std::hex << (int)ret
-                      << " (" << Grow::FingerprintSensor::errorCodeToString(ret) << ")" << std::endl;
+            std::cout << "Converting image to template in buffer " << (int)buffer_id << " (calls FingerprintSensor::imageToTemplate)...\n";
+            uint8_t sensor_confirmation_code;
+            uint8_t driver_status = sensor.imageToTemplate(buffer_id, &sensor_confirmation_code);
+            if (driver_status == R502A_CONF_OK) {
+                std::cout << "Image to Template - Sensor response: 0x" << std::hex << (int)sensor_confirmation_code
+                          << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
+                ret = sensor_confirmation_code;
+            } else {
+                std::cout << "Image to Template - Driver error: 0x" << std::hex << (int)driver_status
+                          << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status) << ")" << std::endl;
+                ret = driver_status;
+            }
+        }
+    } else if (strcmp(command_str, "createtpl") == 0) {
+        std::cout << "Attempting to create template (combines CharBuffer1 & 2, calls FingerprintSensor::createTemplate)..." << std::endl;
+        uint8_t sensor_confirmation_code;
+        uint8_t driver_status = sensor.createTemplate(&sensor_confirmation_code);
+        if (driver_status == R502A_CONF_OK) {
+            std::cout << "Create Template - Sensor response: 0x" << std::hex << (int)sensor_confirmation_code
+                      << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
+            ret = sensor_confirmation_code;
+        } else {
+            std::cout << "Create Template - Driver error: 0x" << std::hex << (int)driver_status
+                      << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status) << ")" << std::endl;
+            ret = driver_status;
+        }
+    } else if (strcmp(command_str, "storetpl") == 0) {
+        if (argc < 5) {
+            std::cerr << "Usage: " << argv[0] << " " << port << " storetpl <buffer_id(1 or 2)> <page_id>\n";
+            ret = R502A_ERR_INVALID_ARGS;
+        } else {
+            uint8_t buffer_id = (uint8_t)atoi(argv[3]);
+            uint16_t page_id = (uint16_t)atoi(argv[4]);
+            std::cout << "Storing template from buffer " << (int)buffer_id << " to page " << page_id
+                      << " (calls FingerprintSensor::storeTemplate)...\n";
+            uint8_t sensor_confirmation_code;
+            uint8_t driver_status = sensor.storeTemplate(buffer_id, page_id, &sensor_confirmation_code);
+            if (driver_status == R502A_CONF_OK) {
+                std::cout << "Store Template - Sensor response: 0x" << std::hex << (int)sensor_confirmation_code
+                          << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
+                ret = sensor_confirmation_code;
+            } else {
+                std::cout << "Store Template - Driver error: 0x" << std::hex << (int)driver_status
+                          << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status) << ")" << std::endl;
+                ret = driver_status;
+            }
         }
     }
     // Add other command handlers here
@@ -246,7 +297,7 @@ int main(int argc, char* argv[]) {
     uart_posix_close_cpp();
     // Adjust return logic: 0 for R502A_CONF_OK, 1 for any other driver/sensor code.
     // The initial `ret = 0xFF` or `ret = 1` for arg errors should also lead to exit 1.
-    if (ret == R502A_ERR_INVALID_ARGS && (strcmp(command_str, "verifypwd") == 0 || strcmp(command_str, "genchar") == 0 || strcmp(command_str, "unknown") == 0) ) {
+    if (ret == R502A_ERR_INVALID_ARGS && (strcmp(command_str, "verifypwd") == 0 || strcmp(command_str, "img2tz") == 0 || strcmp(command_str, "storetpl") == 0 || strcmp(command_str, "unknown") == 0) ) {
          // For arg errors detected in main before calling driver, or unknown command
          return 1;
     }

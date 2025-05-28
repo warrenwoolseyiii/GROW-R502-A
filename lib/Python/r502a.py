@@ -177,39 +177,54 @@ class FingerprintSensor:
             return conf_code, self.SystemParameters(ack_data)
         return conf_code, None
 
-    def get_image_extended(self):
-        """Collects a fingerprint image (extended version)."""
+    def generate_image(self):
+        """
+        Collects a fingerprint image from the sensor and stores it in the sensor's ImageBuffer.
+        Corresponds to R502A_CMD_GET_IMG_EX.
+        Returns the confirmation code from the sensor.
+        """
         conf_code, _ = self._send_command_and_receive_ack(R502A_CMD_GET_IMG_EX)
         return conf_code
 
-    def generate_character_file(self, buffer_id):
+    def image_to_template(self, buffer_id):
         """
-        Generates a character file from the image in ImageBuffer and stores it
-        in the specified CharBuffer (1-6).
+        Generates a character file (template) from the fingerprint image in ImageBuffer
+        and stores it in CharBuffer1 (0x01) or CharBuffer2 (0x02).
+        Corresponds to R502A_CMD_GEN_CHAR.
+        Returns the confirmation code from the sensor.
         """
-        if not 1 <= buffer_id <= 6:
-            raise ValueError("Buffer ID must be between 1 and 6")
+        if buffer_id not in [0x01, 0x02]:
+            # This check aligns with the C driver's stricter validation for enrollment.
+            # The sensor itself might support 1-6 for GenChar generally,
+            # but for enrollment flow, 1 and 2 are typical.
+            raise ValueError("Buffer ID for image_to_template must be 1 or 2.")
         params = buffer_id.to_bytes(1, 'big')
         conf_code, _ = self._send_command_and_receive_ack(R502A_CMD_GEN_CHAR, params)
         return conf_code
 
-    def generate_template(self):
+    def create_template(self):
         """
-        Combines character files (e.g., from CharBuffer1 and CharBuffer2)
-        to generate a template.
+        Combines character files from CharBuffer1 and CharBuffer2 to generate a template
+        and stores it back into both CharBuffer1 and CharBuffer2.
+        Corresponds to R502A_CMD_REG_MODEL.
+        Returns the confirmation code from the sensor.
         """
         conf_code, _ = self._send_command_and_receive_ack(R502A_CMD_REG_MODEL)
         return conf_code
 
-    def store_template(self, buffer_id, model_id):
+    def store_template(self, buffer_id, page_id):
         """
-        Stores the template from the specified buffer (e.g., CharBuffer1)
-        at the designated location (ModelID) in the Flash library.
+        Stores the template from CharBuffer1 (0x01) or CharBuffer2 (0x02)
+        into a specified page_id in the fingerprint library on flash.
+        Corresponds to R502A_CMD_STORE.
+        Returns the confirmation code from the sensor.
         """
-        # buffer_id (1 byte), model_id (2 bytes)
+        if buffer_id not in [0x01, 0x02]:
+            raise ValueError("Buffer ID for store_template must be 1 or 2.")
+        # page_id is a 2-byte value
         params = bytearray()
         params.append(buffer_id)
-        params.extend(model_id.to_bytes(2, 'big'))
+        params.extend(page_id.to_bytes(2, 'big'))
         conf_code, _ = self._send_command_and_receive_ack(R502A_CMD_STORE, bytes(params))
         return conf_code
 

@@ -56,24 +56,50 @@ uint8_t FingerprintSensor::readSystemParameters(r502a_system_params_t& params) {
     return r502a_read_system_parameters(&sensor_handle_, &params);
 }
 
-uint8_t FingerprintSensor::getImageExtended() {
-    if (!initialized_) return R502A_CONF_ERR_RECV;
-    return r502a_get_image_extended(&sensor_handle_);
+uint8_t FingerprintSensor::generateImage(uint8_t* confirmationCode) {
+    if (!initialized_) {
+        if (confirmationCode) *confirmationCode = 0xFF; // Undefined
+        return R502A_ERR_NOT_INITIALIZED; // Or a more C++ specific error
+    }
+    if (!confirmationCode) {
+        return R502A_ERR_INVALID_ARGS; // confirmationCode pointer is mandatory
+    }
+    return r502a_generate_image(&sensor_handle_, confirmationCode);
 }
 
-uint8_t FingerprintSensor::generateCharacterFile(uint8_t buffer_id) {
-    if (!initialized_) return R502A_CONF_ERR_RECV;
-    return r502a_generate_character_file(&sensor_handle_, buffer_id);
+uint8_t FingerprintSensor::imageToTemplate(uint8_t bufferId, uint8_t* confirmationCode) {
+    if (!initialized_) {
+        if (confirmationCode) *confirmationCode = 0xFF;
+        return R502A_ERR_NOT_INITIALIZED;
+    }
+    if (!confirmationCode) {
+        return R502A_ERR_INVALID_ARGS;
+    }
+    // C driver r502a_image_to_template already validates bufferId (0x01 or 0x02)
+    return r502a_image_to_template(&sensor_handle_, bufferId, confirmationCode);
 }
 
-uint8_t FingerprintSensor::generateTemplate() {
-    if (!initialized_) return R502A_CONF_ERR_RECV;
-    return r502a_generate_template(&sensor_handle_);
+uint8_t FingerprintSensor::createTemplate(uint8_t* confirmationCode) {
+    if (!initialized_) {
+        if (confirmationCode) *confirmationCode = 0xFF;
+        return R502A_ERR_NOT_INITIALIZED;
+    }
+    if (!confirmationCode) {
+        return R502A_ERR_INVALID_ARGS;
+    }
+    return r502a_create_template(&sensor_handle_, confirmationCode);
 }
 
-uint8_t FingerprintSensor::storeTemplate(uint8_t buffer_id, uint16_t model_id) {
-    if (!initialized_) return R502A_CONF_ERR_RECV;
-    return r502a_store_template(&sensor_handle_, buffer_id, model_id);
+uint8_t FingerprintSensor::storeTemplate(uint8_t bufferId, uint16_t pageId, uint8_t* confirmationCode) {
+    if (!initialized_) {
+        if (confirmationCode) *confirmationCode = 0xFF;
+        return R502A_ERR_NOT_INITIALIZED;
+    }
+    if (!confirmationCode) {
+        return R502A_ERR_INVALID_ARGS;
+    }
+    // C driver r502a_store_template already validates bufferId (0x01 or 0x02)
+    return r502a_store_template(&sensor_handle_, bufferId, pageId, confirmationCode);
 }
 
 uint8_t FingerprintSensor::searchFingerprint(uint8_t buffer_id, uint16_t start_page, uint16_t num_pages, r502a_search_result_t& result) {

@@ -1,107 +1,152 @@
+#!/usr/bin/env python3
+
 import argparse
 import sys
-import time # For potential delays if needed
+import time
 
 # Adjust the path to import from the parent directory's lib/Python
-sys.path.append('../../') # Or use a more robust relative import if this becomes a package
-from lib.Python.r502a import FingerprintSensor, R502A_CONF_OK, R502A_CONF_NO_FINGER, \
-                               R502A_CONF_FAIL_ENROLL, R502A_CONF_FAIL_GEN_CHAR_SMALL_POINT, \
-                               R502A_CONF_PWD_FAIL, R502A_CONF_FAIL_GEN_CHAR_DISORDERLY, \
-                               R502A_CONF_FAIL_GEN_IMAGE_NO_PRIMARY
+# This allows running the script directly from the examples/Python directory.
+# For a proper package, this would be handled differently.
+sys.path.append('../../')
+from lib.Python.r502a import FingerprintSensor
+# Explicitly use the same base path for the constants module
+from lib.Python import r502a_driver_constants
+from lib.Python.r502a_driver_constants import * # Keep this for direct access to constants
 
 
 def main():
-    parser = argparse.ArgumentParser(description="R502-A Fingerprint Sensor CLI Example")
-    parser.add_argument("port", help="Serial port (e.g., /dev/ttyUSB0 or COM3)")
-    parser.add_argument("command", help="Command to execute",
-                        choices=["handshake", "readparams", "verifypwd", "getimage", "genchar"])
-    # Add more choices as commands are implemented
+    parser = argparse.ArgumentParser(description="R502-A Fingerprint Sensor Example (Python)")
+    parser.add_argument("port", help="Serial port where the R502-A sensor is connected (e.g., /dev/ttyUSB0 or COM3)")
+    
+    subparsers = parser.add_subparsers(dest="command", help="Command to execute", required=True)
 
-    # Command-specific arguments
-    parser.add_argument("--password", help="Password for 'verifypwd' (hex, e.g., 0x00000000)", default="0x00000000")
-    parser.add_argument("--buffer_id", help="Buffer ID (1-6) for 'genchar'", type=int, default=1)
+    subparsers.add_parser("handshake", help="Perform handshake with the sensor")
+    subparsers.add_parser("readparams", help="Read system parameters from the sensor")
+    
+    parser_verifypwd = subparsers.add_parser("verifypwd", help="Verify sensor password")
+    parser_verifypwd.add_argument("password", type=lambda x: int(x, 16), help="Password in hexadecimal (e.g., 0x00000000)")
 
+    subparsers.add_parser("getimage", help="Collect fingerprint image and store in ImageBuffer")
+    
+    parser_img2tz = subparsers.add_parser("img2tz", help="Generate template from ImageBuffer to CharBuffer1 or CharBuffer2")
+    parser_img2tz.add_argument("buffer_id", type=int, choices=[1, 2], help="CharBuffer ID (1 or 2)")
+
+    subparsers.add_parser("createtpl", help="Combine CharBuffer1 and CharBuffer2 to create a template")
+
+    parser_storetpl = subparsers.add_parser("storetpl", help="Store template from CharBuffer to Flash")
+    parser_storetpl.add_argument("buffer_id", type=int, choices=[1, 2], help="CharBuffer ID (1 or 2) containing the template")
+    parser_storetpl.add_argument("page_id", type=int, help="Page ID (address) in Flash to store the template")
+
+    parser_search = subparsers.add_parser("search", help="Search fingerprint library")
+    parser_search.add_argument("buffer_id", type=int, choices=[1, 2], help="CharBuffer ID (1 or 2) containing template to search for")
+    parser_search.add_argument("start_page", type=int, help="Starting page ID for search")
+    parser_search.add_argument("num_pages", type=int, help="Number of pages to search")
+
+    parser_deletetpl = subparsers.add_parser("deletetpl", help="Delete template(s) from Flash")
+    parser_deletetpl.add_argument("start_page", type=int, help="Starting page ID to delete from")
+    parser_deletetpl.add_argument("num_to_delete", type=int, help="Number of templates to delete")
+
+    subparsers.add_parser("empty", help="Empty the entire fingerprint library")
 
     args = parser.parse_args()
 
     sensor = FingerprintSensor(args.port)
-
     print(f"Attempting to connect to sensor on {args.port}...")
     if not sensor.connect():
-        print(f"Failed to connect to sensor on port {args.port}.")
-        return 1
+        print("Failed to connect to the sensor.")
+        sys.exit(1)
     
     print(f"Connected. Executing command: {args.command}")
-    ret_code = R502A_CONF_OK # Default to OK for commands not returning a specific code directly
-    result_data = None
+    ret_code = R502A_CONF_ERR_RECV # Default to an error, will be overwritten by successful command
 
     try:
         if args.command == "handshake":
             ret_code = sensor.handshake()
-            print(f"Handshake result: 0x{ret_code:02X} ({'OK' if ret_code == R502A_CONF_OK else 'FAIL'})")
+            print(f"Handshake response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
         
         elif args.command == "readparams":
             ret_code, params = sensor.read_system_parameters()
-            print(f"Read System Parameters result: 0x{ret_code:02X} ({'OK' if ret_code == R502A_CONF_OK else 'FAIL'})")
+            print(f"Read System Parameters response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
             if ret_code == R502A_CONF_OK and params:
-                print(params) # Uses the __str__ method of SystemParameters
-            result_data = params
+                print(params)
 
         elif args.command == "verifypwd":
-            try:
-                password_val = int(args.password, 16)
-            except ValueError:
-                print("Invalid password format. Please use hex (e.g., 0x12345678).")
-                sensor.disconnect()
-                return 1
-            print(f"Verifying password: 0x{password_val:08X}")
-            ret_code = sensor.verify_password(password_val)
-            print(f"Verify Password result: 0x{ret_code:02X} ({'OK' if ret_code == R502A_CONF_OK else ('WRONG_PWD' if ret_code == R502A_CONF_PWD_FAIL else 'FAIL')})")
+            ret_code = sensor.verify_password(args.password)
+            print(f"Verify Password response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
 
         elif args.command == "getimage":
-            print("Attempting to get image (GetImageEx)...")
-            ret_code = sensor.get_image_extended()
-            print(f"Get Image Extended result: 0x{ret_code:02X} (", end="")
-            if ret_code == R502A_CONF_OK: print("OK", end="")
-            elif ret_code == R502A_CONF_NO_FINGER: print("NO_FINGER", end="")
-            elif ret_code == R502A_CONF_FAIL_ENROLL: print("FAIL_COLLECT", end="") # Also 0x03
-            elif ret_code == R502A_CONF_FAIL_GEN_CHAR_SMALL_POINT: print("POOR_IMAGE_QUALITY", end="") # Also 0x07
-            else: print("FAIL/OTHER", end="")
-            print(")")
+            print("Attempting to generate image...")
+            ret_code = sensor.generate_image() # Corrected method name
+            print(f"Generate Image response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+            if ret_code == R502A_CONF_NO_FINGER:
+                print("No finger detected. Please place your finger on the sensor.")
+            elif ret_code == R502A_CONF_OK:
+                print("Fingerprint image collected successfully.")
 
-        elif args.command == "genchar":
-            if not (1 <= args.buffer_id <= 6):
-                print("Invalid buffer_id. Must be 1-6.")
-                sensor.disconnect()
-                return 1
-            print(f"Generating character file in buffer {args.buffer_id}...")
-            ret_code = sensor.generate_character_file(args.buffer_id)
-            print(f"Generate Character File result: 0x{ret_code:02X} (", end="")
-            if ret_code == R502A_CONF_OK: print("OK", end="")
-            elif ret_code == R502A_CONF_FAIL_GEN_CHAR_DISORDERLY: print("FAIL_DISORDERLY_IMG", end="")
-            elif ret_code == R502A_CONF_FAIL_GEN_CHAR_SMALL_POINT: print("FAIL_SMALL_POINT_IMG", end="")
-            elif ret_code == R502A_CONF_FAIL_GEN_IMAGE_NO_PRIMARY: print("FAIL_NO_PRIMARY_IMG", end="")
-            else: print("FAIL/OTHER", end="")
-            print(")")
-            
-        # Add other commands here
-        # elif args.command == "regmodel":
-        # ...
+        elif args.command == "img2tz": # Renamed from genchar
+            print(f"Attempting to convert image to template in CharBuffer{args.buffer_id}...")
+            ret_code = sensor.image_to_template(args.buffer_id) # Corrected method name
+            print(f"Image to Template response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+
+        elif args.command == "createtpl":
+            print("Attempting to create template (combining CharBuffer1 and CharBuffer2)...")
+            ret_code = sensor.create_template()
+            print(f"Create Template response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+            if ret_code == R502A_CONF_FAIL_COMBINE:
+                print("Failed to combine templates. Ensure two distinct, good quality images were captured.")
+
+        elif args.command == "storetpl":
+            print(f"Attempting to store template from CharBuffer{args.buffer_id} to PageID {args.page_id}...")
+            ret_code = sensor.store_template(args.buffer_id, args.page_id)
+            print(f"Store Template response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+        
+        elif args.command == "search":
+            print(f"Searching library for template in CharBuffer{args.buffer_id} (Pages {args.start_page}-{args.start_page + args.num_pages -1})...")
+            ret_code, result = sensor.search_fingerprint(args.buffer_id, args.start_page, args.num_pages)
+            print(f"Search Fingerprint response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+            if ret_code == R502A_CONF_OK and result:
+                print(f"  Match found: {result}")
+            elif ret_code == R502A_CONF_FAIL_FIND_MATCH:
+                print("  No matching fingerprint found.")
+        
+        elif args.command == "deletetpl":
+            print(f"Deleting {args.num_to_delete} template(s) starting from PageID {args.start_page}...")
+            ret_code = sensor.delete_template(args.start_page, args.num_to_delete)
+            print(f"Delete Template response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+
+        elif args.command == "empty":
+            print("Attempting to empty the fingerprint library...")
+            # Add a confirmation step for safety in a real application
+            # confirm = input("Are you sure you want to delete all fingerprints? (yes/no): ")
+            # if confirm.lower() == 'yes':
+            #    ret_code = sensor.empty_fingerprint_library()
+            #    print(f"Empty Library response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+            # else:
+            #    print("Operation cancelled.")
+            #    ret_code = R502A_CONF_OK # Or some other code indicating cancellation
+            ret_code = sensor.empty_fingerprint_library() # Direct call for now
+            print(f"Empty Library response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+
         else:
+            # This case should not be reached if subparsers are 'required'
             print(f"Unknown command: {args.command}")
-            sensor.disconnect()
-            return 1
+            ret_code = R502A_ERR_INVALID_ARGS
 
+
+    except ValueError as e: # Catches errors from int() conversion or library value checks
+        print(f"Input error: {e}")
+        ret_code = R502A_ERR_INVALID_ARGS
     except Exception as e:
-        print(f"An error occurred: {e}")
-        sensor.disconnect()
-        return 1
+        print(f"An unexpected error occurred: {e}")
+        import traceback
+        traceback.print_exc()
+        ret_code = R502A_CONF_ERR_RECV # Generic error
     finally:
-        sensor.disconnect()
-        print("Disconnected.")
+        if sensor:
+            sensor.disconnect()
+            print("Disconnected.")
 
-    return 0 if ret_code == R502A_CONF_OK else 1
-
+    sys.exit(0 if ret_code == R502A_CONF_OK else 1)
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
