@@ -6,8 +6,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
+#endif // Closes #ifdef __cplusplus from line 7
 // --- Constants ---
 // Packet Structure
 #define R502A_PACKET_HEADER_HIGH 0xEF
@@ -127,6 +126,75 @@ uint8_t r502a_init(r502a_handle_t* handle, uint32_t device_addr,
                    r502a_uart_write_fn write_func, r502a_uart_read_fn read_func);
 
 /**
+ * @brief Collects a fingerprint image from the sensor and stores it in the sensor's ImageBuffer.
+ *
+ * This command instructs the sensor to capture a fingerprint image. The sensor will wait for a finger
+ * to be placed on the surface.
+ *
+ * @param handle Pointer to the R502A handle.
+ * @param confirmation_code Pointer to store the confirmation code from the sensor.
+ *                          Possible values include:
+ *                          - R502A_CONF_OK: Command execution successful.
+ *                          - R502A_CONF_ERR_RECV: Error receiving package.
+ *                          - R502A_CONF_NO_FINGER: No finger on the sensor.
+ *                          - R502A_CONF_IMG_FAIL: Failed to collect finger.
+ * @return R502A_ERR_OK on success, or an error code on failure (e.g., R502A_ERR_UART_WRITE_FAIL, R502A_ERR_UART_READ_FAIL, R502A_ERR_INVALID_ACK_PACKET).
+ */
+uint8_t r502a_generate_image(r502a_handle_t* handle, uint8_t* confirmation_code);
+
+/**
+ * @brief Generates a character file (template) from the fingerprint image in ImageBuffer
+ *        and stores it in CharBuffer1 or CharBuffer2.
+ *
+ * @param handle Pointer to the R502A handle.
+ * @param buffer_id The character buffer to store the generated template (R502A_CHAR_BUFFER_1 or R502A_CHAR_BUFFER_2).
+ * @param confirmation_code Pointer to store the confirmation code from the sensor.
+ *                          Possible values include:
+ *                          - R502A_CONF_OK: Command execution successful.
+ *                          - R502A_CONF_ERR_RECV: Error receiving package.
+ *                          - R502A_CONF_IMG_TOO_DISORDERLY: Image is too disorderly to generate a character file.
+ *                          - R502A_CONF_IMG_LACK_FEATURE_POINTS: Image lacks characteristic points (too small area).
+ *                          - R502A_CONF_IMG_FAIL: Failed to generate character file.
+ * @return R502A_ERR_OK on success, or an error code on failure.
+ */
+uint8_t r502a_image_to_template(r502a_handle_t* handle, uint8_t buffer_id, uint8_t* confirmation_code);
+
+/**
+ * @brief Combines character files from CharBuffer1 and CharBuffer2 to generate a more robust template
+ *        and stores it back into both CharBuffer1 and CharBuffer2 (effectively overwriting them).
+ *
+ * This command is used during enrollment. Typically, two fingerprint images are captured,
+ * converted to character files (one in CharBuffer1, the other in CharBuffer2), and then
+ * this command is used to merge them into a single template.
+ *
+ * @param handle Pointer to the R502A handle.
+ * @param confirmation_code Pointer to store the confirmation code from the sensor.
+ *                          Possible values include:
+ *                          - R502A_CONF_OK: Command execution successful.
+ *                          - R502A_CONF_ERR_RECV: Error receiving package.
+ *                          - R502A_CONF_FINGER_NOMATCH: The two fingerprints do not match.
+ * @return R502A_ERR_OK on success, or an error code on failure.
+ */
+uint8_t r502a_create_template(r502a_handle_t* handle, uint8_t* confirmation_code);
+
+/**
+ * @brief Stores the template from CharBuffer1 or CharBuffer2 into a specified pageID (address)
+ *        in the fingerprint library on the sensor's flash.
+ *
+ * @param handle Pointer to the R502A handle.
+ * @param buffer_id The character buffer containing the template to store (R502A_CHAR_BUFFER_1 or R502A_CHAR_BUFFER_2).
+ * @param page_id The page ID (0 to N-1, where N is the library capacity) where the template will be stored.
+ * @param confirmation_code Pointer to store the confirmation code from the sensor.
+ *                          Possible values include:
+ *                          - R502A_CONF_OK: Command execution successful.
+ *                          - R502A_CONF_ERR_RECV: Error receiving package.
+ *                          - R502A_CONF_BAD_LOCATION: Invalid page ID.
+ *                          - R502A_CONF_FLASH_ERR: Error writing to flash.
+ * @return R502A_ERR_OK on success, or an error code on failure.
+ */
+uint8_t r502a_store_template(r502a_handle_t* handle, uint8_t buffer_id, uint16_t page_id, uint8_t* confirmation_code);
+
+/**
  * @brief Sends a HandShake command to the module.
  *
  * @param handle Pointer to the initialized r502a_handle_t structure.
@@ -146,49 +214,6 @@ uint8_t r502a_handshake(r502a_handle_t* handle);
  */
 uint8_t r502a_verify_password(r502a_handle_t* handle, uint32_t password);
 
-/**
- * @brief Collects a fingerprint image (extended version).
- *        Detects a finger and stores the image in the module's ImageBuffer.
- *        This version provides more detailed feedback on image quality.
- *
- * @param handle Pointer to the initialized r502a_handle_t structure.
- * @return R502A_CONF_OK if image collection is successful,
- *         R502A_CONF_NO_FINGER if no finger is detected,
- *         or another error/confirmation code (e.g., for poor image quality).
- */
-uint8_t r502a_get_image_extended(r502a_handle_t* handle);
-
-/**
- * @brief Generates a character file from the image in ImageBuffer and stores it
- *        in the specified CharBuffer.
- *
- * @param handle Pointer to the initialized r502a_handle_t structure.
- * @param buffer_id The CharBuffer ID (1-6) where the character file will be stored.
- * @return R502A_CONF_OK if successful, or an error/confirmation code.
- */
-uint8_t r502a_generate_character_file(r502a_handle_t* handle, uint8_t buffer_id);
-
-/**
- * @brief Combines character files (e.g., from CharBuffer1 and CharBuffer2)
- *        to generate a template. The template is stored back in CharBuffer1 and CharBuffer2.
- *
- * @param handle Pointer to the initialized r502a_handle_t structure.
- * @return R502A_CONF_OK if successful, R502A_CONF_FAIL_COMBINE (0x0a) if character
- *         files don't belong to the same finger, or another error/confirmation code.
- */
-uint8_t r502a_generate_template(r502a_handle_t* handle);
-
-/**
- * @brief Stores the template from the specified buffer (CharBuffer1, as per datasheet note)
- *        at the designated location (ModelID) in the Flash library.
- *
- * @param handle Pointer to the initialized r502a_handle_t structure.
- * @param buffer_id The CharBuffer ID from which to take the template (datasheet note suggests 0x01).
- * @param model_id The location/page ID (0-N, where N is library capacity) to store the template.
- * @return R502A_CONF_OK if successful, R502A_CONF_ADDR_BEYOND_LIB if model_id is out of range,
- *         R502A_CONF_ERR_WRITE_FLASH on flash error, or another error/confirmation code.
- */
-uint8_t r502a_store_template(r502a_handle_t* handle, uint8_t buffer_id, uint16_t model_id);
 
 /**
  * @brief Searches the finger library for a template matching the one in CharBufferID,

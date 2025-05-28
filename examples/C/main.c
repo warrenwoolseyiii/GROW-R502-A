@@ -169,8 +169,10 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "  handshake\n");
         fprintf(stderr, "  readparams\n");
         fprintf(stderr, "  verifypwd <password_hex>\n");
-        fprintf(stderr, "  getimage\n");
-        fprintf(stderr, "  genchar <buffer_id(1-6)>\n");
+        fprintf(stderr, "  getimage (calls r502a_generate_image)\n");
+        fprintf(stderr, "  img2tz <buffer_id(1 or 2)> (calls r502a_image_to_template)\n");
+        fprintf(stderr, "  createtpl (calls r502a_create_template - combines CharBuffer1 & 2)\n");
+        fprintf(stderr, "  storetpl <buffer_id(1 or 2)> <page_id> (calls r502a_store_template)\n");
         // Add more commands as they are tested
         return 1;
     }
@@ -213,24 +215,65 @@ int main(int argc, char* argv[]) {
             printf("Verify Password result: 0x%02X (%s)\n", ret, r502a_error_code_to_string(ret));
         }
     } else if (strcmp(command, "getimage") == 0) {
-        printf("Attempting to get image (GetImageEx)...\n");
-        ret = r502a_get_image_extended(&sensor_handle);
-        printf("Get Image Extended result: 0x%02X (%s)\n", ret, r502a_error_code_to_string(ret));
-    } else if (strcmp(command, "genchar") == 0) {
+        printf("Attempting to generate image (calls r502a_generate_image)...\n");
+        uint8_t sensor_confirmation_code;
+        uint8_t driver_status = r502a_generate_image(&sensor_handle, &sensor_confirmation_code);
+        if (driver_status == R502A_CONF_OK) { // Driver call successful
+            printf("Generate Image - Sensor response: 0x%02X (%s)\n", sensor_confirmation_code, r502a_error_code_to_string(sensor_confirmation_code));
+            ret = sensor_confirmation_code; // Use sensor's code for overall status
+        } else { // Driver call failed
+            printf("Generate Image - Driver error: 0x%02X (%s)\n", driver_status, r502a_error_code_to_string(driver_status));
+            ret = driver_status; // Use driver's error code
+        }
+    } else if (strcmp(command, "img2tz") == 0) {
         if (argc < 4) {
-            fprintf(stderr, "Usage: %s %s genchar <buffer_id(1-6)>\n", argv[0], port);
+            fprintf(stderr, "Usage: %s %s img2tz <buffer_id(1 or 2)>\n", argv[0], port);
             ret = R502A_ERR_INVALID_ARGS;
         } else {
             uint8_t buffer_id = (uint8_t)atoi(argv[3]);
-            // The r502a_generate_character_file function now checks buffer_id validity.
-            printf("Generating character file in buffer %u...\n", buffer_id);
-            ret = r502a_generate_character_file(&sensor_handle, buffer_id);
-            printf("Generate Character File result: 0x%02X (%s)\n", ret, r502a_error_code_to_string(ret));
+            // The driver function r502a_image_to_template checks buffer_id validity (0x01 or 0x02).
+            printf("Converting image to template in buffer %u (calls r502a_image_to_template)...\n", buffer_id);
+            uint8_t sensor_confirmation_code;
+            uint8_t driver_status = r502a_image_to_template(&sensor_handle, buffer_id, &sensor_confirmation_code);
+            if (driver_status == R502A_CONF_OK) { // Driver call successful
+                printf("Image to Template - Sensor response: 0x%02X (%s)\n", sensor_confirmation_code, r502a_error_code_to_string(sensor_confirmation_code));
+                ret = sensor_confirmation_code; // Use sensor's code for overall status
+            } else { // Driver call failed
+                printf("Image to Template - Driver error: 0x%02X (%s)\n", driver_status, r502a_error_code_to_string(driver_status));
+                ret = driver_status; // Use driver's error code
+            }
+        }
+    } else if (strcmp(command, "createtpl") == 0) {
+        printf("Attempting to create template (combines CharBuffer1 & 2, calls r502a_create_template)...\n");
+        uint8_t sensor_confirmation_code;
+        uint8_t driver_status = r502a_create_template(&sensor_handle, &sensor_confirmation_code);
+        if (driver_status == R502A_CONF_OK) {
+            printf("Create Template - Sensor response: 0x%02X (%s)\n", sensor_confirmation_code, r502a_error_code_to_string(sensor_confirmation_code));
+            ret = sensor_confirmation_code;
+        } else {
+            printf("Create Template - Driver error: 0x%02X (%s)\n", driver_status, r502a_error_code_to_string(driver_status));
+            ret = driver_status;
+        }
+    } else if (strcmp(command, "storetpl") == 0) {
+        if (argc < 5) {
+            fprintf(stderr, "Usage: %s %s storetpl <buffer_id(1 or 2)> <page_id>\n", argv[0], port);
+            ret = R502A_ERR_INVALID_ARGS;
+        } else {
+            uint8_t buffer_id = (uint8_t)atoi(argv[3]);
+            uint16_t page_id = (uint16_t)atoi(argv[4]);
+            printf("Storing template from buffer %u to page %u (calls r502a_store_template)...\n", buffer_id, page_id);
+            uint8_t sensor_confirmation_code;
+            uint8_t driver_status = r502a_store_template(&sensor_handle, buffer_id, page_id, &sensor_confirmation_code);
+            if (driver_status == R502A_CONF_OK) {
+                printf("Store Template - Sensor response: 0x%02X (%s)\n", sensor_confirmation_code, r502a_error_code_to_string(sensor_confirmation_code));
+                ret = sensor_confirmation_code;
+            } else {
+                printf("Store Template - Driver error: 0x%02X (%s)\n", driver_status, r502a_error_code_to_string(driver_status));
+                ret = driver_status;
+            }
         }
     }
     // Add other command handlers here:
-    // else if (strcmp(command, "regmodel") == 0) { ... }
-    // else if (strcmp(command, "store") == 0) { ... }
     // else if (strcmp(command, "search") == 0) { ... }
     // else if (strcmp(command, "delete") == 0) { ... }
     // else if (strcmp(command, "empty") == 0) { ... }
@@ -242,7 +285,7 @@ int main(int argc, char* argv[]) {
     uart_posix_close();
     // Adjust return logic: 0 for R502A_CONF_OK, 1 for any other driver/sensor code.
     // The initial `ret = 0xFF` or `ret = 1` for arg errors should also lead to exit 1.
-    if (ret == R502A_ERR_INVALID_ARGS && (strcmp(command, "verifypwd") == 0 || strcmp(command, "genchar") == 0 || strcmp(command, "unknown") == 0) ) {
+    if (ret == R502A_ERR_INVALID_ARGS && (strcmp(command, "verifypwd") == 0 || strcmp(command, "img2tz") == 0 || strcmp(command, "storetpl") == 0 || strcmp(command, "unknown") == 0) ) {
          // For arg errors detected in main before calling driver, or unknown command
          return 1;
     }

@@ -247,63 +247,107 @@ uint8_t r502a_verify_password(r502a_handle_t* handle, uint32_t password) {
     return send_command_and_receive_ack(handle, R502A_CMD_VFY_PWD, params, 4, NULL, NULL);
 }
 
-uint8_t r502a_get_image_extended(r502a_handle_t* handle) {
+uint8_t r502a_generate_image(r502a_handle_t* handle, uint8_t* confirmation_code) {
     if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
+        if (confirmation_code != NULL) *confirmation_code = 0xFF; // Undefined
         return R502A_ERR_NOT_INITIALIZED;
     }
-
-    // GetImageEx command has no parameters.
-    // The acknowledge packet contains only the confirmation code.
-    // Content length = 1 byte (ConfCode). Package length field = 0x0003.
-    return send_command_and_receive_ack(handle, R502A_CMD_GET_IMG_EX, NULL, 0, NULL, NULL);
-}
-
-uint8_t r502a_generate_character_file(r502a_handle_t* handle, uint8_t buffer_id) {
-    if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
-        return R502A_ERR_NOT_INITIALIZED;
-    }
-    if (buffer_id < 1 || buffer_id > 6) { // Datasheet implies CharBufferID 1 or 2 for some ops, but GenChar can be 1-6
+    if (confirmation_code == NULL) {
         return R502A_ERR_INVALID_ARGS;
     }
 
-    uint8_t param = buffer_id;
+    // Command: GetImageEx (R502A_CMD_GET_IMG_EX, 0x28)
+    // No parameters for this command.
+    // ACK contains only the confirmation code.
+    uint8_t status_from_sensor_or_driver = send_command_and_receive_ack(handle, R502A_CMD_GET_IMG_EX, NULL, 0, NULL, NULL);
+    *confirmation_code = status_from_sensor_or_driver;
 
-    // GenChar command has one parameter: BufferID (1 byte).
-    // The acknowledge packet contains only the confirmation code.
-    // Content length = 1 byte (ConfCode). Package length field = 0x0003.
-    return send_command_and_receive_ack(handle, R502A_CMD_GEN_CHAR, &param, 1, NULL, NULL);
+    if (status_from_sensor_or_driver >= R502A_ERR_NOT_INITIALIZED) { // Check if it's a driver error
+        return status_from_sensor_or_driver;
+    }
+    return R502A_CONF_OK; // Driver operation successful, sensor status in *confirmation_code
 }
 
-uint8_t r502a_generate_template(r502a_handle_t* handle) {
+uint8_t r502a_image_to_template(r502a_handle_t* handle, uint8_t buffer_id, uint8_t* confirmation_code) {
     if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
+        if (confirmation_code != NULL) *confirmation_code = 0xFF; // Undefined
         return R502A_ERR_NOT_INITIALIZED;
     }
+    if (confirmation_code == NULL) {
+        return R502A_ERR_INVALID_ARGS;
+    }
+    // Per datasheet for GenChar (0x02), BufferID is CharBuffer1 (0x01) or CharBuffer2 (0x02)
+    // R502A_CHAR_BUFFER_1 and R502A_CHAR_BUFFER_2 should be defined in the header.
+    // For now, assuming 0x01 and 0x02 are the valid values.
+    if (buffer_id != 0x01 && buffer_id != 0x02) {
+         if (confirmation_code != NULL) *confirmation_code = 0xFF; // Undefined
+        return R502A_ERR_INVALID_ARGS;
+    }
 
-    // RegModel command has no parameters (datasheet page 19).
-    // It combines info from CharBuffer1 and CharBuffer2.
-    // The acknowledge packet contains only the confirmation code.
-    // Content length = 1 byte (ConfCode). Package length field = 0x0003.
-    return send_command_and_receive_ack(handle, R502A_CMD_REG_MODEL, NULL, 0, NULL, NULL);
+    // Command: GenChar (R502A_CMD_GEN_CHAR, 0x02)
+    // Parameter: BufferID (1 byte)
+    // ACK contains only the confirmation code.
+    uint8_t cmd_param = buffer_id;
+    uint8_t status_from_sensor_or_driver = send_command_and_receive_ack(handle, R502A_CMD_GEN_CHAR, &cmd_param, 1, NULL, NULL);
+    *confirmation_code = status_from_sensor_or_driver;
+
+    if (status_from_sensor_or_driver >= R502A_ERR_NOT_INITIALIZED) { // Check if it's a driver error
+        return status_from_sensor_or_driver;
+    }
+    return R502A_CONF_OK; // Driver operation successful, sensor status in *confirmation_code
 }
 
-uint8_t r502a_store_template(r502a_handle_t* handle, uint8_t buffer_id, uint16_t model_id) {
+uint8_t r502a_create_template(r502a_handle_t* handle, uint8_t* confirmation_code) {
     if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
+        if (confirmation_code != NULL) *confirmation_code = 0xFF; // Undefined
         return R502A_ERR_NOT_INITIALIZED;
     }
-    // Datasheet page 21, note for Store (0x06) command:
-    // "CharBufferID is filled with 0x01"
-    // We'll allow the user to specify it but they should be aware of this.
-    // A check for buffer_id range (1-2 or 1-6 based on context) could be added if strictness is desired.
+    if (confirmation_code == NULL) {
+        return R502A_ERR_INVALID_ARGS;
+    }
 
-    uint8_t params[3];
-    params[0] = buffer_id;
-    params[1] = (model_id >> 8) & 0xFF; // ModelID High Byte
-    params[2] = model_id & 0xFF;      // ModelID Low Byte
+    // Command: RegModel (R502A_CMD_REG_MODEL, 0x05)
+    // No parameters for this command.
+    // ACK contains only the confirmation code.
+    uint8_t status_from_sensor_or_driver = send_command_and_receive_ack(handle, R502A_CMD_REG_MODEL, NULL, 0, NULL, NULL);
+    *confirmation_code = status_from_sensor_or_driver;
 
-    // Store command has two parameters: CharBufferID (1 byte) and ModelID (2 bytes). Total 3 bytes.
-    // The acknowledge packet contains only the confirmation code.
-    // Content length = 1 byte (ConfCode). Package length field = 0x0003.
-    return send_command_and_receive_ack(handle, R502A_CMD_STORE, params, 3, NULL, NULL);
+    if (status_from_sensor_or_driver >= R502A_ERR_NOT_INITIALIZED) { // Check if it's a driver error
+        return status_from_sensor_or_driver;
+    }
+    return R502A_CONF_OK; // Driver operation successful, sensor status in *confirmation_code
+}
+
+uint8_t r502a_store_template(r502a_handle_t* handle, uint8_t buffer_id, uint16_t page_id, uint8_t* confirmation_code) {
+    if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
+        if (confirmation_code != NULL) *confirmation_code = 0xFF; // Undefined
+        return R502A_ERR_NOT_INITIALIZED;
+    }
+    if (confirmation_code == NULL) {
+        return R502A_ERR_INVALID_ARGS;
+    }
+    // Per datasheet for Store (0x06), BufferID is CharBuffer1 (0x01) or CharBuffer2 (0x02)
+    if (buffer_id != 0x01 && buffer_id != 0x02) {
+        if (confirmation_code != NULL) *confirmation_code = 0xFF; // Undefined
+        return R502A_ERR_INVALID_ARGS;
+    }
+    // page_id range check could be added if library size is known, e.g. 0 to (finger_library_size - 1)
+
+    // Command: Store (R502A_CMD_STORE, 0x06)
+    // Parameters: BufferID (1 byte), PageID (2 bytes)
+    // ACK contains only the confirmation code.
+    uint8_t cmd_params[3];
+    cmd_params[0] = buffer_id;
+    cmd_params[1] = (page_id >> 8) & 0xFF; // PageID High Byte
+    cmd_params[2] = page_id & 0xFF;      // PageID Low Byte
+
+    uint8_t status_from_sensor_or_driver = send_command_and_receive_ack(handle, R502A_CMD_STORE, cmd_params, sizeof(cmd_params), NULL, NULL);
+    *confirmation_code = status_from_sensor_or_driver;
+
+    if (status_from_sensor_or_driver >= R502A_ERR_NOT_INITIALIZED) { // Check if it's a driver error
+        return status_from_sensor_or_driver;
+    }
+    return R502A_CONF_OK; // Driver operation successful, sensor status in *confirmation_code
 }
 
 uint8_t r502a_search_fingerprint(r502a_handle_t* handle, uint8_t buffer_id,
