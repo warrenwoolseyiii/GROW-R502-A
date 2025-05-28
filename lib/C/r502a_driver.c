@@ -423,6 +423,46 @@ uint8_t r502a_empty_fingerprint_library(r502a_handle_t* handle) {
     return send_command_and_receive_ack(handle, R502A_CMD_EMPTY, NULL, 0, NULL, NULL);
 }
 
+uint8_t r502a_set_aura_led_config(r502a_handle_t* handle,
+                                  uint8_t ctrl_code,
+                                  uint8_t speed,
+                                  uint8_t color_index,
+                                  uint8_t count,
+                                  uint8_t* confirmation_code) {
+    if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
+        if (confirmation_code != NULL) *confirmation_code = 0xFF; // Undefined
+        return R502A_ERR_NOT_INITIALIZED;
+    }
+    if (confirmation_code == NULL) {
+        return R502A_ERR_INVALID_ARGS;
+    }
+
+    // Validate parameters (basic checks, more could be added based on datasheet specifics)
+    // Ctrl code: 0x01-0x06 are known. Others might exist or be reserved.
+    // Speed: 0-255
+    // Color index: 0x01-0x07 are known.
+    // Count: 0-255
+
+    uint8_t cmd_params[4];
+    cmd_params[0] = ctrl_code;
+    cmd_params[1] = speed;
+    cmd_params[2] = color_index;
+    cmd_params[3] = count;
+
+    // Command: AuraLedConfig (R502A_CMD_AURA_LED_CONFIG, 0x35)
+    // Parameters: Ctrl (1 byte), Speed (1 byte), Color (1 byte), Count (1 byte)
+    // ACK contains only the confirmation code.
+    uint8_t status_from_sensor_or_driver = send_command_and_receive_ack(
+        handle, R502A_CMD_AURA_LED_CONFIG, cmd_params, sizeof(cmd_params), NULL, NULL
+    );
+    *confirmation_code = status_from_sensor_or_driver;
+
+    if (status_from_sensor_or_driver >= R502A_ERR_NOT_INITIALIZED) { // Check if it's a driver error
+        return status_from_sensor_or_driver;
+    }
+    return R502A_CONF_OK; // Driver operation successful, sensor status in *confirmation_code
+}
+
 const char* r502a_error_code_to_string(uint8_t error_code) {
     switch (error_code) {
         // Sensor Confirmation Codes

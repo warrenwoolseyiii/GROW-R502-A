@@ -30,7 +30,26 @@ extern "C" {
 #define R502A_CMD_SEARCH         0x04
 #define R502A_CMD_DELETE_CHAR    0x0C
 #define R502A_CMD_EMPTY          0x0D
+#define R502A_CMD_AURA_LED_CONFIG 0x35 // Aura LED Control
 // ... (add more as needed)
+
+// --- LED Control Constants (for AuraLedConfig 0x35) ---
+// Control Codes (Ctrl)
+#define R502A_LED_CTRL_BREATHING   0x01 // Breathing light
+#define R502A_LED_CTRL_FLASHING    0x02 // Flashing light
+#define R502A_LED_CTRL_ON          0x03 // Light always ON
+#define R502A_LED_CTRL_OFF         0x04 // Light always OFF
+#define R502A_LED_CTRL_GRADUAL_ON  0x05 // Light gradually ON
+#define R502A_LED_CTRL_GRADUAL_OFF 0x06 // Light gradually OFF
+
+// Color Indicies (Color)
+#define R502A_LED_COLOR_RED        0x01
+#define R502A_LED_COLOR_BLUE       0x02
+#define R502A_LED_COLOR_PURPLE     0x03
+#define R502A_LED_COLOR_GREEN      0x04
+#define R502A_LED_COLOR_YELLOW     0x05
+#define R502A_LED_COLOR_CYAN       0x06
+#define R502A_LED_COLOR_WHITE      0x07
 
 // Confirmation Codes (Datasheet pg 9-10)
 #define R502A_CONF_OK            0x00 // Command execution complete
@@ -260,6 +279,27 @@ uint8_t r502a_empty_fingerprint_library(r502a_handle_t* handle);
  * @return R502A_CONF_OK if successful, otherwise an error/confirmation code.
  */
 uint8_t r502a_read_system_parameters(r502a_handle_t* handle, r502a_system_params_t* params);
+
+/**
+ * @brief Configures the sensor's Aura LED.
+ *
+ * @param handle Pointer to the initialized r502a_handle_t structure.
+ * @param ctrl_code The LED control mode (e.g., R502A_LED_CTRL_BREATHING, R502A_LED_CTRL_ON).
+ * @param speed Speed of the LED effect (0-255). Relevant for breathing, flashing, gradual on/off.
+ * @param color_index The LED color (e.g., R502A_LED_COLOR_RED, R502A_LED_COLOR_BLUE).
+ * @param count Number of times for the effect to repeat (0 for infinite). Relevant for breathing, flashing.
+ * @param confirmation_code Pointer to store the confirmation code from the sensor.
+ *                          Typically R502A_CONF_OK on success.
+ * @return R502A_CONF_OK on successful driver operation and ACK from sensor,
+ *         or a driver-level error code (e.g., R502A_ERR_UART_WRITE_FAIL),
+ *         or a sensor error code if the command was rejected.
+ */
+uint8_t r502a_set_aura_led_config(r502a_handle_t* handle,
+                                  uint8_t ctrl_code,
+                                  uint8_t speed,
+                                  uint8_t color_index,
+                                  uint8_t count,
+                                  uint8_t* confirmation_code);
 
 /**
  * @brief Converts an R502-A confirmation or driver error code to a human-readable string.

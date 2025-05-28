@@ -173,6 +173,7 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "  img2tz <buffer_id(1 or 2)> (calls r502a_image_to_template)\n");
         fprintf(stderr, "  createtpl (calls r502a_create_template - combines CharBuffer1 & 2)\n");
         fprintf(stderr, "  storetpl <buffer_id(1 or 2)> <page_id> (calls r502a_store_template)\n");
+        fprintf(stderr, "  setled <ctrl> <speed> <color> <count> (configures Aura LED; e.g., setled 1 200 2 0 for blue breathing)\n");
         // Add more commands as they are tested
         return 1;
     }
@@ -272,6 +273,32 @@ int main(int argc, char* argv[]) {
                 ret = driver_status;
             }
         }
+    } else if (strcmp(command, "setled") == 0) {
+        if (argc < 7) { // command + 4 args = 5. argv[0] + port + command + 4 args = 7
+            fprintf(stderr, "Usage: %s %s setled <ctrl_code> <speed> <color_index> <count>\n", argv[0], port);
+            fprintf(stderr, "  ctrl_code: 1=breathing, 2=flashing, 3=on, 4=off, 5=gradual_on, 6=gradual_off\n");
+            fprintf(stderr, "  speed: 0-255 (effect speed)\n");
+            fprintf(stderr, "  color_index: 1=red, 2=blue, 3=purple, 4=green, 5=yellow, 6=cyan, 7=white\n");
+            fprintf(stderr, "  count: 0-255 (0 for infinite for breathing/flashing)\n");
+            ret = R502A_ERR_INVALID_ARGS;
+        } else {
+            uint8_t ctrl = (uint8_t)atoi(argv[3]);
+            uint8_t speed = (uint8_t)atoi(argv[4]);
+            uint8_t color = (uint8_t)atoi(argv[5]);
+            uint8_t count = (uint8_t)atoi(argv[6]);
+            printf("Setting LED: Ctrl=0x%02X, Speed=%u, Color=0x%02X, Count=%u\n", ctrl, speed, color, count);
+
+            uint8_t sensor_confirmation_code;
+            uint8_t driver_status = r502a_set_aura_led_config(&sensor_handle, ctrl, speed, color, count, &sensor_confirmation_code);
+            
+            if (driver_status == R502A_CONF_OK) {
+                printf("Set LED - Sensor response: 0x%02X (%s)\n", sensor_confirmation_code, r502a_error_code_to_string(sensor_confirmation_code));
+                ret = sensor_confirmation_code;
+            } else {
+                printf("Set LED - Driver error: 0x%02X (%s)\n", driver_status, r502a_error_code_to_string(driver_status));
+                ret = driver_status;
+            }
+        }
     }
     // Add other command handlers here:
     // else if (strcmp(command, "search") == 0) { ... }
@@ -285,7 +312,7 @@ int main(int argc, char* argv[]) {
     uart_posix_close();
     // Adjust return logic: 0 for R502A_CONF_OK, 1 for any other driver/sensor code.
     // The initial `ret = 0xFF` or `ret = 1` for arg errors should also lead to exit 1.
-    if (ret == R502A_ERR_INVALID_ARGS && (strcmp(command, "verifypwd") == 0 || strcmp(command, "img2tz") == 0 || strcmp(command, "storetpl") == 0 || strcmp(command, "unknown") == 0) ) {
+    if (ret == R502A_ERR_INVALID_ARGS && (strcmp(command, "verifypwd") == 0 || strcmp(command, "img2tz") == 0 || strcmp(command, "storetpl") == 0 || strcmp(command, "setled") == 0 || strcmp(command, "unknown") == 0) ) {
          // For arg errors detected in main before calling driver, or unknown command
          return 1;
     }
