@@ -48,6 +48,12 @@ def main():
 
     subparsers.add_parser("empty", help="Empty the entire fingerprint library")
 
+    parser_setled = subparsers.add_parser("setled", help="Configure Aura LED")
+    parser_setled.add_argument("ctrl_code", type=int, help="Control code (e.g., 1:breathing, 2:flashing, 3:on, 4:off)")
+    parser_setled.add_argument("speed", type=int, help="Speed of effect (0-255)")
+    parser_setled.add_argument("color_index", type=int, help="Color index (e.g., 1:red, 2:blue, 7:white)")
+    parser_setled.add_argument("count", type=int, help="Number of cycles (0 for infinite)")
+
     args = parser.parse_args()
 
     sensor = FingerprintSensor(args.port)
@@ -127,6 +133,11 @@ def main():
             ret_code = sensor.empty_fingerprint_library() # Direct call for now
             print(f"Empty Library response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
 
+        elif args.command == "setled":
+            print(f"Setting LED: Ctrl={args.ctrl_code}, Speed={args.speed}, Color={args.color_index}, Count={args.count}")
+            ret_code = sensor.set_aura_led_config(args.ctrl_code, args.speed, args.color_index, args.count)
+            print(f"Set LED response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+            
         else:
             # This case should not be reached if subparsers are 'required'
             print(f"Unknown command: {args.command}")

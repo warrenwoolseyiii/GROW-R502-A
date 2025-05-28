@@ -17,6 +17,25 @@ namespace Grow {
 
 class FingerprintSensor {
 public:
+    // --- LED Control Constants (mirroring C driver defines) ---
+    // Control Codes
+    static constexpr uint8_t LED_CTRL_BREATHING   = 0x01;
+    static constexpr uint8_t LED_CTRL_FLASHING    = 0x02;
+    static constexpr uint8_t LED_CTRL_ON          = 0x03;
+    static constexpr uint8_t LED_CTRL_OFF         = 0x04;
+    static constexpr uint8_t LED_CTRL_GRADUAL_ON  = 0x05;
+    static constexpr uint8_t LED_CTRL_GRADUAL_OFF = 0x06;
+
+    // Color Indicies
+    static constexpr uint8_t LED_COLOR_RED        = 0x01;
+    static constexpr uint8_t LED_COLOR_BLUE       = 0x02;
+    static constexpr uint8_t LED_COLOR_PURPLE     = 0x03;
+    static constexpr uint8_t LED_COLOR_GREEN      = 0x04;
+    static constexpr uint8_t LED_COLOR_YELLOW     = 0x05;
+    static constexpr uint8_t LED_COLOR_CYAN       = 0x06;
+    static constexpr uint8_t LED_COLOR_WHITE      = 0x07;
+
+
     FingerprintSensor(uint32_t device_address,
                       r502a_uart_write_fn write_uart_fn,
                       r502a_uart_read_fn read_uart_fn);
@@ -86,6 +105,23 @@ public:
      */
     uint8_t storeTemplate(uint8_t bufferId, uint16_t pageId, uint8_t* confirmationCode);
 
+    // --- LED Control ---
+    /**
+     * @brief Configures the sensor's Aura LED.
+     *
+     * @param ctrl_code The LED control mode (e.g., FingerprintSensor::LED_CTRL_BREATHING).
+     * @param speed Speed of the LED effect (0-255).
+     * @param color_index The LED color (e.g., FingerprintSensor::LED_COLOR_BLUE).
+     * @param count Number of times for the effect to repeat (0 for infinite).
+     * @param confirmationCode Pointer to store the confirmation code from the sensor.
+     * @return R502A_CONF_OK on successful C driver operation (check confirmationCode for sensor status),
+     *         or a C driver-level error code on failure.
+     */
+    uint8_t setAuraLedConfig(uint8_t ctrl_code,
+                             uint8_t speed,
+                             uint8_t color_index,
+                             uint8_t count,
+                             uint8_t* confirmationCode);
 private:
     r502a_handle_t sensor_handle_; // Use the C handle internally
     bool initialized_;

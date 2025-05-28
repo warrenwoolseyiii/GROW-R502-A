@@ -22,6 +22,7 @@ R502A_CMD_STORE          = 0x06
 R502A_CMD_SEARCH         = 0x04
 R502A_CMD_DELETE_CHAR    = 0x0C
 R502A_CMD_EMPTY          = 0x0D
+R502A_CMD_AURA_LED_CONFIG = 0x35 # Aura LED Control
 
 R502A_CONF_OK            = 0x00
 R502A_CONF_ERR_RECV      = 0x01
@@ -257,6 +258,25 @@ class FingerprintSensor:
     def empty_fingerprint_library(self):
         """Deletes all templates from the Flash fingerprint library."""
         conf_code, _ = self._send_command_and_receive_ack(R502A_CMD_EMPTY)
+        return conf_code
+
+    def set_aura_led_config(self, ctrl_code, speed, color_index, count):
+        """
+        Configures the sensor's Aura LED.
+        :param ctrl_code: The LED control mode (e.g., R502A_LED_CTRL_BREATHING).
+        :param speed: Speed of the LED effect (0-255).
+        :param color_index: The LED color (e.g., R502A_LED_COLOR_BLUE).
+        :param count: Number of times for the effect to repeat (0 for infinite).
+        :return: Confirmation code from the sensor.
+        """
+        # Parameters: Ctrl (1 byte), Speed (1 byte), Color (1 byte), Count (1 byte)
+        params = bytearray()
+        params.append(ctrl_code)
+        params.append(speed)
+        params.append(color_index)
+        params.append(count)
+        
+        conf_code, _ = self._send_command_and_receive_ack(R502A_CMD_AURA_LED_CONFIG, bytes(params))
         return conf_code
 
     # System Parameter structure (for parsing read_system_parameters)

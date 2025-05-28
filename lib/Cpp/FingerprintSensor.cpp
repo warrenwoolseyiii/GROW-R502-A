@@ -117,6 +117,23 @@ uint8_t FingerprintSensor::emptyFingerprintLibrary() {
     return r502a_empty_fingerprint_library(&sensor_handle_);
 }
 
+uint8_t FingerprintSensor::setAuraLedConfig(uint8_t ctrl_code,
+                                            uint8_t speed,
+                                            uint8_t color_index,
+                                            uint8_t count,
+                                            uint8_t* confirmationCode) {
+    if (!initialized_) {
+        if (confirmationCode) *confirmationCode = 0xFF; // Undefined
+        return R502A_ERR_NOT_INITIALIZED;
+    }
+    if (!confirmationCode) {
+        return R502A_ERR_INVALID_ARGS; // confirmationCode pointer is mandatory
+    }
+    // Parameter validation can be added here if desired, though the C driver
+    // might also perform some. The C++ constants are available for reference.
+    return r502a_set_aura_led_config(&sensor_handle_, ctrl_code, speed, color_index, count, confirmationCode);
+}
+
 const char* FingerprintSensor::errorCodeToString(uint8_t errorCode) {
     return r502a_error_code_to_string(errorCode);
 }

@@ -22,6 +22,25 @@ R502A_CMD_STORE          = 0x06 # Used by store_template in Python lib
 R502A_CMD_SEARCH         = 0x04
 R502A_CMD_DELETE_CHAR    = 0x0C
 R502A_CMD_EMPTY          = 0x0D
+R502A_CMD_AURA_LED_CONFIG = 0x35 # Aura LED Control
+
+# --- LED Control Constants (for AuraLedConfig 0x35) ---
+# Control Codes (Ctrl)
+R502A_LED_CTRL_BREATHING   = 0x01 # Breathing light
+R502A_LED_CTRL_FLASHING    = 0x02 # Flashing light
+R502A_LED_CTRL_ON          = 0x03 # Light always ON
+R502A_LED_CTRL_OFF         = 0x04 # Light always OFF
+R502A_LED_CTRL_GRADUAL_ON  = 0x05 # Light gradually ON
+R502A_LED_CTRL_GRADUAL_OFF = 0x06 # Light gradually OFF
+
+# Color Indicies (Color)
+R502A_LED_COLOR_RED        = 0x01
+R502A_LED_COLOR_BLUE       = 0x02
+R502A_LED_COLOR_PURPLE     = 0x03
+R502A_LED_COLOR_GREEN      = 0x04
+R502A_LED_COLOR_YELLOW     = 0x05
+R502A_LED_COLOR_CYAN       = 0x06
+R502A_LED_COLOR_WHITE      = 0x07
 
 # Confirmation Codes
 R502A_CONF_OK            = 0x00 # Command execution complete

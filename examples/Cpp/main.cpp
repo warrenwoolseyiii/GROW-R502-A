@@ -174,6 +174,7 @@ int main(int argc, char* argv[]) {
                   << "  img2tz <buffer_id(1 or 2)> (calls FingerprintSensor::imageToTemplate)\n"
                   << "  createtpl (calls FingerprintSensor::createTemplate)\n"
                   << "  storetpl <buffer_id(1 or 2)> <page_id> (calls FingerprintSensor::storeTemplate)\n"
+                  << "  setled <ctrl> <speed> <color> <count> (configures Aura LED; e.g., setled 1 200 2 0 for blue breathing)\n"
                   // Add more commands
                   << std::endl;
         return 1;
@@ -287,6 +288,37 @@ int main(int argc, char* argv[]) {
                 ret = driver_status;
             }
         }
+    } else if (strcmp(command_str, "setled") == 0) {
+        if (argc < 7) { // command + 4 args = 5. argv[0] + port + command + 4 args = 7
+            std::cerr << "Usage: " << argv[0] << " " << port << " setled <ctrl_code> <speed> <color_index> <count>\n"
+                      << "  ctrl_code: 1=breathing, 2=flashing, 3=on, 4=off, 5=gradual_on, 6=gradual_off (see FingerprintSensor::LED_CTRL_... constants)\n"
+                      << "  speed: 0-255 (effect speed)\n"
+                      << "  color_index: 1=red, 2=blue, 3=purple, etc. (see FingerprintSensor::LED_COLOR_... constants)\n"
+                      << "  count: 0-255 (0 for infinite for breathing/flashing)\n";
+            ret = R502A_ERR_INVALID_ARGS;
+        } else {
+            uint8_t ctrl = (uint8_t)atoi(argv[3]);
+            uint8_t speed = (uint8_t)atoi(argv[4]);
+            uint8_t color = (uint8_t)atoi(argv[5]);
+            uint8_t count = (uint8_t)atoi(argv[6]);
+            std::cout << "Setting LED: Ctrl=0x" << std::hex << (int)ctrl
+                      << ", Speed=" << std::dec << (int)speed
+                      << ", Color=0x" << std::hex << (int)color
+                      << ", Count=" << std::dec << (int)count << std::endl;
+
+            uint8_t sensor_confirmation_code;
+            uint8_t driver_status = sensor.setAuraLedConfig(ctrl, speed, color, count, &sensor_confirmation_code);
+            
+            if (driver_status == R502A_CONF_OK) {
+                std::cout << "Set LED - Sensor response: 0x" << std::hex << (int)sensor_confirmation_code
+                          << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
+                ret = sensor_confirmation_code;
+            } else {
+                std::cout << "Set LED - Driver error: 0x" << std::hex << (int)driver_status
+                          << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status) << ")" << std::endl;
+                ret = driver_status;
+            }
+        }
     }
     // Add other command handlers here
     else {
@@ -297,7 +329,7 @@ int main(int argc, char* argv[]) {
     uart_posix_close_cpp();
     // Adjust return logic: 0 for R502A_CONF_OK, 1 for any other driver/sensor code.
     // The initial `ret = 0xFF` or `ret = 1` for arg errors should also lead to exit 1.
-    if (ret == R502A_ERR_INVALID_ARGS && (strcmp(command_str, "verifypwd") == 0 || strcmp(command_str, "img2tz") == 0 || strcmp(command_str, "storetpl") == 0 || strcmp(command_str, "unknown") == 0) ) {
+    if (ret == R502A_ERR_INVALID_ARGS && (strcmp(command_str, "verifypwd") == 0 || strcmp(command_str, "img2tz") == 0 || strcmp(command_str, "storetpl") == 0 || strcmp(command_str, "setled") == 0 || strcmp(command_str, "unknown") == 0) ) {
          // For arg errors detected in main before calling driver, or unknown command
          return 1;
     }
