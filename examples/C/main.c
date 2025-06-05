@@ -175,6 +175,7 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "  storetpl <buffer_id(1 or 2)> <page_id> (calls r502a_store_template)\n");
         fprintf(stderr, "  setled <ctrl> <speed> <color> <count> (configures Aura LED; e.g., setled 1 200 2 0 for blue breathing)\n");
         fprintf(stderr, "  enroll <page_id> (interactive enrollment to specified page ID)\n");
+        fprintf(stderr, "  verify (verify fingerprint against stored templates)\n");
         // Add more commands as they are tested
         return 1;
     }
@@ -396,6 +397,56 @@ int main(int argc, char* argv[]) {
             } else {
                 printf("Enrollment completed successfully.\n");
             }
+        }
+    } else if(strcmp(command, "verify") == 0) {
+        printf("Starting fingerprint verification...\n");
+        // Get the fingerprint image
+        uint8_t sensor_confirmation_code;
+        uint8_t driver_status = r502a_generate_image(&sensor_handle, &sensor_confirmation_code);
+        if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+            fprintf(stderr, "Verification failed: GetImage - Driver: 0x%02X (%s), Sensor: 0x%02X (%s)\n",
+                    driver_status, r502a_error_code_to_string(driver_status),
+                    sensor_confirmation_code, r502a_error_code_to_string(sensor_confirmation_code));
+            ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+        } else {
+            printf("Image captured successfully. Converting to template...\n");
+            driver_status = r502a_image_to_template(&sensor_handle, 0x01, &sensor_confirmation_code);
+            if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+                fprintf(stderr, "Verification failed: Img2Tz - Driver: 0x%02X (%s), Sensor: 0x%02X (%s)\n",
+                        driver_status, r502a_error_code_to_string(driver_status),
+                        sensor_confirmation_code, r502a_error_code_to_string(sensor_confirmation_code));
+                ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+            } else {
+                printf("Template generated successfully. Searching in library...\n");
+                for(uint16_t page_id = 0; page_id < 200; page_id += 10) {
+                    uint8_t buffer_id = 0x01; // Use CharBuffer1 for verification
+                    r502a_search_result_t search_result;
+                    driver_status = r502a_search_fingerprint(&sensor_handle, buffer_id, page_id, page_id + 10, &search_result);
+                    if (driver_status == R502A_CONF_OK) {
+                        printf("Fingerprint verified successfully! Found at Page ID %u.\n", search_result.page_id);
+                        printf("Match Score: %u\n", search_result.match_score);
+                        ret = R502A_CONF_OK;
+                        // Flash green LED for success
+                        r502a_set_aura_led_config(&sensor_handle, R502A_LED_CTRL_FLASHING, 150, R502A_LED_COLOR_GREEN, 3, &sensor_confirmation_code);
+                        break; // Exit loop on successful verification
+                    } else {
+                        fprintf(stderr, "Verification failed: Search - Driver: 0x%02X (%s), Sensor: 0x%02X (%s)\n",
+                                driver_status, r502a_error_code_to_string(driver_status),
+                                sensor_confirmation_code, r502a_error_code_to_string(sensor_confirmation_code));
+                        ret = (driver_status != R502A_CONF_OK
+                                ? driver_status : sensor_confirmation_code);
+                    }
+                }
+            }
+        }
+
+        // Check the return code, if it's an error, flash red LED
+        if (ret != R502A_CONF_OK) {
+            // Flash red LED for error
+            r502a_set_aura_led_config(&sensor_handle, R502A_LED_CTRL_FLASHING, 150, R502A_LED_COLOR_RED, 3, &sensor_confirmation_code);
+            fprintf(stderr, "Verification process failed with code: 0x%02X (%s)\n", ret, r502a_error_code_to_string(ret));
+        } else {
+            printf("Verification completed successfully.\n");
         }
     }
     // Add other command handlers here:
