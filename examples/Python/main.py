@@ -53,6 +53,11 @@ def main():
     parser_setled.add_argument("speed", type=int, help="Speed of effect (0-255)")
     parser_setled.add_argument("color_index", type=int, help="Color index (e.g., 1:red, 2:blue, 7:white)")
     parser_setled.add_argument("count", type=int, help="Number of cycles (0 for infinite)")
+    # Add enroll and verify commands
+    parser_enroll = subparsers.add_parser("enroll", help="Interactive enrollment to specified page ID")
+    parser_enroll.add_argument("page_id", type=int, help="Page ID to enroll the fingerprint to")
+
+    subparsers.add_parser("verify", help="Verify fingerprint against stored templates")
 
     args = parser.parse_args()
 
@@ -61,7 +66,7 @@ def main():
     if not sensor.connect():
         print("Failed to connect to the sensor.")
         sys.exit(1)
-    
+
     print(f"Connected. Executing command: {args.command}")
     ret_code = R502A_CONF_ERR_RECV # Default to an error, will be overwritten by successful command
 
@@ -122,14 +127,6 @@ def main():
 
         elif args.command == "empty":
             print("Attempting to empty the fingerprint library...")
-            # Add a confirmation step for safety in a real application
-            # confirm = input("Are you sure you want to delete all fingerprints? (yes/no): ")
-            # if confirm.lower() == 'yes':
-            #    ret_code = sensor.empty_fingerprint_library()
-            #    print(f"Empty Library response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
-            # else:
-            #    print("Operation cancelled.")
-            #    ret_code = R502A_CONF_OK # Or some other code indicating cancellation
             ret_code = sensor.empty_fingerprint_library() # Direct call for now
             print(f"Empty Library response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
 
@@ -137,11 +134,96 @@ def main():
             print(f"Setting LED: Ctrl={args.ctrl_code}, Speed={args.speed}, Color={args.color_index}, Count={args.count}")
             ret_code = sensor.set_aura_led_config(args.ctrl_code, args.speed, args.color_index, args.count)
             print(f"Set LED response: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
-            
+
+        elif args.command == "enroll":
+            page_id = args.page_id
+            print(f"Starting interactive enrollment for Page ID {page_id}.")
+            # --- First Scan ---
+            print("Step 1: Place your finger on the sensor for the FIRST scan, then press Enter.")
+            sensor.set_aura_led_config(3, 0, 2, 1)  # LED ON, blue
+            input()
+            print("Capturing first image...")
+            ret_code = sensor.generate_image()
+            if ret_code != R502A_CONF_OK:
+                print(f"Enrollment failed: GetImage (1) - 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+            else:
+                print("First image captured successfully. Generating template for CharBuffer1...")
+                ret_code = sensor.image_to_template(1)
+                if ret_code != R502A_CONF_OK:
+                    print(f"Enrollment failed: Img2Tz (1) - 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+                else:
+                    print("Template for CharBuffer1 generated. Remove finger.")
+                    sensor.set_aura_led_config(4, 0, 0, 0)  # LED OFF
+                    time.sleep(2)
+                    # --- Second Scan ---
+                    print("Step 2: Place the SAME finger on the sensor for the SECOND scan, then press Enter.")
+                    sensor.set_aura_led_config(3, 0, 2, 1)  # LED ON, blue
+                    input()
+                    print("Capturing second image...")
+                    ret_code = sensor.generate_image()
+                    if ret_code != R502A_CONF_OK:
+                        print(f"Enrollment failed: GetImage (2) - 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+                    else:
+                        print("Second image captured successfully. Generating template for CharBuffer2...")
+                        ret_code = sensor.image_to_template(2)
+                        if ret_code != R502A_CONF_OK:
+                            print(f"Enrollment failed: Img2Tz (2) - 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+                        else:
+                            print("Template for CharBuffer2 generated. Creating combined template...")
+                            sensor.set_aura_led_config(4, 0, 0, 0)  # LED OFF
+                            ret_code = sensor.create_template()
+                            if ret_code != R502A_CONF_OK:
+                                print(f"Enrollment failed: CreateTemplate - 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+                                if ret_code == R502A_CONF_FINGER_NOMATCH:
+                                    print("Note: The two fingerprints did not match. Please try again with the same finger.")
+                            else:
+                                print(f"Combined template created successfully. Storing to Page ID {page_id}...")
+                                ret_code = sensor.store_template(1, page_id)
+                                if ret_code != R502A_CONF_OK:
+                                    print(f"Enrollment failed: StoreTemplate - 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+                                else:
+                                    print(f"Fingerprint successfully enrolled and stored at Page ID {page_id}!")
+                                    ret_code = R502A_CONF_OK
+                                    sensor.set_aura_led_config(2, 150, 4, 3)  # Flash green LED for success
+            # Check the return code, if it's an error, flash red LED
+            if ret_code != R502A_CONF_OK:
+                sensor.set_aura_led_config(2, 150, 1, 3)  # Flash red LED for error
+                print(f"Enrollment process failed with code: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+            else:
+                print("Enrollment completed successfully.")
+
+        elif args.command == "verify":
+            print("Starting fingerprint verification...")
+            ret_code = sensor.generate_image()
+            if ret_code != R502A_CONF_OK:
+                print(f"Verification failed: GetImage - 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+            else:
+                print("Image captured successfully. Converting to template...")
+                ret_code = sensor.image_to_template(1)
+                if ret_code != R502A_CONF_OK:
+                    print(f"Verification failed: Img2Tz - 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+                else:
+                    print("Template generated successfully. Searching in library...")
+                    for page_id in range(0, 200, 10):  # Search in chunks of 10 pages
+                        ret_code, result = sensor.search_fingerprint(1, page_id, page_id + 10)
+                        if ret_code == R502A_CONF_OK and result:
+                            print(f"Fingerprint verified successfully! Found at Page ID {result.page_id}.")
+                            print(f"Match Score: {result.match_score}")
+                            sensor.set_aura_led_config(2, 150, 4, 3)  # Flash green LED for success
+                            break
+                        else:
+                            print(f"Verification failed: Search - 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+                            sensor.set_aura_led_config(2, 150, 1, 3)  # Flash red LED for error
+            if ret_code != R502A_CONF_OK:
+                print(f"Verification process failed with code: 0x{ret_code:02X} ({error_code_to_string(ret_code)})")
+            else:
+                print("Verification completed successfully.")
+
         else:
             # This case should not be reached if subparsers are 'required'
             print(f"Unknown command: {args.command}")
             ret_code = R502A_ERR_INVALID_ARGS
+
 
 
     except ValueError as e: # Catches errors from int() conversion or library value checks
