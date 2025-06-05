@@ -174,6 +174,7 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "  createtpl (calls r502a_create_template - combines CharBuffer1 & 2)\n");
         fprintf(stderr, "  storetpl <buffer_id(1 or 2)> <page_id> (calls r502a_store_template)\n");
         fprintf(stderr, "  setled <ctrl> <speed> <color> <count> (configures Aura LED; e.g., setled 1 200 2 0 for blue breathing)\n");
+        fprintf(stderr, "  enroll <page_id> (interactive enrollment to specified page ID)\n");
         // Add more commands as they are tested
         return 1;
     }
@@ -299,6 +300,103 @@ int main(int argc, char* argv[]) {
                 ret = driver_status;
             }
         }
+    } else if (strcmp(command, "enroll") == 0) {
+        if (argc < 4) {
+            fprintf(stderr, "Usage: %s %s enroll <page_id>\n", argv[0], port);
+            ret = R502A_ERR_INVALID_ARGS;
+        } else {
+            uint16_t page_id = (uint16_t)atoi(argv[3]);
+            printf("Starting interactive enrollment for Page ID %u.\n", page_id);
+
+            uint8_t sensor_confirmation_code;
+            uint8_t driver_status;
+
+            // --- First Scan ---
+            printf("Step 1: Place your finger on the sensor for the FIRST scan, then press Enter.\n");
+            // Turn on LED to indicate scanning
+            r502a_set_aura_led_config(&sensor_handle, R502A_LED_CTRL_ON, 0, R502A_LED_COLOR_BLUE, 1, &sensor_confirmation_code);
+            while(getchar()!='\n'); // Wait for Enter key
+            printf("Capturing first image...\n");
+            driver_status = r502a_generate_image(&sensor_handle, &sensor_confirmation_code);
+            if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+                fprintf(stderr, "Enrollment failed: GetImage (1) - Driver: 0x%02X (%s), Sensor: 0x%02X (%s)\n",
+                        driver_status, r502a_error_code_to_string(driver_status),
+                        sensor_confirmation_code, r502a_error_code_to_string(sensor_confirmation_code));
+                ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+            } else {
+                printf("First image captured successfully. Generating template for CharBuffer1...\n");
+                driver_status = r502a_image_to_template(&sensor_handle, 0x01, &sensor_confirmation_code);
+                if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+                    fprintf(stderr, "Enrollment failed: Img2Tz (1) - Driver: 0x%02X (%s), Sensor: 0x%02X (%s)\n",
+                            driver_status, r502a_error_code_to_string(driver_status),
+                            sensor_confirmation_code, r502a_error_code_to_string(sensor_confirmation_code));
+                    ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+                } else {
+                    printf("Template for CharBuffer1 generated. Remove finger.\n");
+                    // Turn off LED or indicate to remove finger
+                    r502a_set_aura_led_config(&sensor_handle, R502A_LED_CTRL_OFF, 0, 0, 0, &sensor_confirmation_code);
+                    sleep(2); // Give user time to remove finger
+
+                    // --- Second Scan ---
+                    printf("Step 2: Place the SAME finger on the sensor for the SECOND scan, then press Enter.\n");
+                    r502a_set_aura_led_config(&sensor_handle, R502A_LED_CTRL_ON, 0, R502A_LED_COLOR_BLUE, 1, &sensor_confirmation_code);
+                    while(getchar()!='\n'); // Wait for Enter key
+                    printf("Capturing second image...\n");
+                    driver_status = r502a_generate_image(&sensor_handle, &sensor_confirmation_code);
+                    if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+                        fprintf(stderr, "Enrollment failed: GetImage (2) - Driver: 0x%02X (%s), Sensor: 0x%02X (%s)\n",
+                                driver_status, r502a_error_code_to_string(driver_status),
+                                sensor_confirmation_code, r502a_error_code_to_string(sensor_confirmation_code));
+                        ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+                    } else {
+                        printf("Second image captured successfully. Generating template for CharBuffer2...\n");
+                        driver_status = r502a_image_to_template(&sensor_handle, 0x02, &sensor_confirmation_code);
+                        if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+                            fprintf(stderr, "Enrollment failed: Img2Tz (2) - Driver: 0x%02X (%s), Sensor: 0x%02X (%s)\n",
+                                    driver_status, r502a_error_code_to_string(driver_status),
+                                    sensor_confirmation_code, r502a_error_code_to_string(sensor_confirmation_code));
+                            ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+                        } else {
+                            printf("Template for CharBuffer2 generated. Creating combined template...\n");
+                            r502a_set_aura_led_config(&sensor_handle, R502A_LED_CTRL_OFF, 0, 0, 0, &sensor_confirmation_code);
+                            driver_status = r502a_create_template(&sensor_handle, &sensor_confirmation_code);
+                            if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+                                fprintf(stderr, "Enrollment failed: CreateTemplate - Driver: 0x%02X (%s), Sensor: 0x%02X (%s)\n",
+                                        driver_status, r502a_error_code_to_string(driver_status),
+                                        sensor_confirmation_code, r502a_error_code_to_string(sensor_confirmation_code));
+                                if (sensor_confirmation_code == R502A_CONF_FINGER_NOMATCH) {
+                                     fprintf(stderr, "Note: The two fingerprints did not match. Please try again with the same finger.\n");
+                                }
+                                ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+                            } else {
+                                printf("Combined template created successfully. Storing to Page ID %u...\n", page_id);
+                                driver_status = r502a_store_template(&sensor_handle, 0x01, page_id, &sensor_confirmation_code); // Store from CharBuffer1
+                                if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+                                    fprintf(stderr, "Enrollment failed: StoreTemplate - Driver: 0x%02X (%s), Sensor: 0x%02X (%s)\n",
+                                            driver_status, r502a_error_code_to_string(driver_status),
+                                            sensor_confirmation_code, r502a_error_code_to_string(sensor_confirmation_code));
+                                    ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+                                } else {
+                                    printf("Fingerprint successfully enrolled and stored at Page ID %u!\n", page_id);
+                                    ret = R502A_CONF_OK;
+                                    // Flash green LED for success
+                                    r502a_set_aura_led_config(&sensor_handle, R502A_LED_CTRL_FLASHING, 150, R502A_LED_COLOR_GREEN, 3, &sensor_confirmation_code);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Check the return code, if it's an error, flash red LED
+            if (ret != R502A_CONF_OK) {
+                // Flash red LED for error
+                r502a_set_aura_led_config(&sensor_handle, R502A_LED_CTRL_FLASHING, 150, R502A_LED_COLOR_RED, 3, &sensor_confirmation_code);
+                fprintf(stderr, "Enrollment process failed with code: 0x%02X (%s)\n", ret, r502a_error_code_to_string(ret));
+            } else {
+                printf("Enrollment completed successfully.\n");
+            }
+        }
     }
     // Add other command handlers here:
     // else if (strcmp(command, "search") == 0) { ... }
@@ -312,7 +410,7 @@ int main(int argc, char* argv[]) {
     uart_posix_close();
     // Adjust return logic: 0 for R502A_CONF_OK, 1 for any other driver/sensor code.
     // The initial `ret = 0xFF` or `ret = 1` for arg errors should also lead to exit 1.
-    if (ret == R502A_ERR_INVALID_ARGS && (strcmp(command, "verifypwd") == 0 || strcmp(command, "img2tz") == 0 || strcmp(command, "storetpl") == 0 || strcmp(command, "setled") == 0 || strcmp(command, "unknown") == 0) ) {
+    if (ret == R502A_ERR_INVALID_ARGS && (strcmp(command, "verifypwd") == 0 || strcmp(command, "img2tz") == 0 || strcmp(command, "storetpl") == 0 || strcmp(command, "setled") == 0 || strcmp(command, "enroll") == 0 || strcmp(command, "unknown") == 0) ) {
          // For arg errors detected in main before calling driver, or unknown command
          return 1;
     }

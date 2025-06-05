@@ -88,6 +88,7 @@ Replace `/dev/ttyUSB0` with your sensor's serial port.
 *   `img2tz <buffer_id>`: Generate a template from the last image into CharBuffer (1 or 2).
 *   `createtpl`: Combine templates from CharBuffer1 and CharBuffer2.
 *   `storetpl <buffer_id> <page_id>`: Store the template from CharBuffer (1 or 2) to a specific page ID in flash.
+*   `setled <ctrl> <speed> <color> <count>`: Configure Aura LED (e.g., `setled 1 200 2 0` for blue breathing).
 *   (Other commands like `search`, `deletetpl`, `empty` are also available in the C driver and can be added to the example).
 
 **Enrollment Sequence (C Example):**
@@ -116,7 +117,7 @@ Replace `/dev/ttyUSB0` with your sensor's serial port.
 ./build/r502a_cpp_example /dev/ttyUSB0 <command> [args...]
 ```
 **Available Commands (C++ Example):**
-Commands are similar to the C example, including `handshake`, `readparams`, `verifypwd`, `getimage`, `img2tz`, `createtpl`, `storetpl`.
+Commands are similar to the C example, including `handshake`, `readparams`, `verifypwd`, `getimage`, `img2tz`, `createtpl`, `storetpl`, and `setled <ctrl> <speed> <color> <count>`.
 
 **Enrollment Sequence (C++ Example):**
 Follow the same sequence as the C example, using the C++ executable.
@@ -146,6 +147,7 @@ python3 ./main.py /dev/ttyUSB0 <command> [args...]
 *   `search <buffer_id> <start_page> <num_pages>`: Search for a fingerprint.
 *   `deletetpl <start_page> <num_to_delete>`: Delete template(s).
 *   `empty`: Empty the entire fingerprint library.
+*   `setled <ctrl_code> <speed> <color_index> <count>`: Configure Aura LED.
 
 **Enrollment Sequence (Python Example):**
 1.  `python3 ./main.py /dev/ttyUSB0 getimage` (Place finger)
