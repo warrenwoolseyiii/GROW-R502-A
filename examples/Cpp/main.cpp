@@ -319,6 +319,146 @@ int main(int argc, char* argv[]) {
                 ret = driver_status;
             }
         }
+    } else if (strcmp(command_str, "enroll") == 0) {
+        if (argc < 4) {
+            std::cerr << "Usage: " << argv[0] << " " << port << " enroll <page_id>\n";
+            ret = R502A_ERR_INVALID_ARGS;
+        } else {
+            uint16_t page_id = (uint16_t)atoi(argv[3]);
+            std::cout << "Starting interactive enrollment for Page ID " << page_id << "." << std::endl;
+
+            uint8_t sensor_confirmation_code;
+            uint8_t driver_status;
+
+            // --- First Scan ---
+            std::cout << "Step 1: Place your finger on the sensor for the FIRST scan, then press Enter." << std::endl;
+            sensor.setAuraLedConfig(Grow::FingerprintSensor::LED_CTRL_ON, 0, Grow::FingerprintSensor::LED_COLOR_BLUE, 1, &sensor_confirmation_code);
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            std::cout << "Capturing first image..." << std::endl;
+            driver_status = sensor.generateImage(&sensor_confirmation_code);
+            if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+                std::cerr << "Enrollment failed: GetImage (1) - Driver: 0x"
+                          << std::hex << (int)driver_status << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status)
+                          << "), Sensor: 0x" << (int)sensor_confirmation_code << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
+                ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+            } else {
+                std::cout << "First image captured successfully. Generating template for CharBuffer1..." << std::endl;
+                driver_status = sensor.imageToTemplate(0x01, &sensor_confirmation_code);
+                if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+                    std::cerr << "Enrollment failed: Img2Tz (1) - Driver: 0x"
+                              << std::hex << (int)driver_status << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status)
+                              << "), Sensor: 0x" << (int)sensor_confirmation_code << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
+                    ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+                } else {
+                    std::cout << "Template for CharBuffer1 generated. Remove finger." << std::endl;
+                    sensor.setAuraLedConfig(Grow::FingerprintSensor::LED_CTRL_OFF, 0, 0, 0, &sensor_confirmation_code);
+                    sleep(2);
+
+                    // --- Second Scan ---
+                    std::cout << "Step 2: Place the SAME finger on the sensor for the SECOND scan, then press Enter." << std::endl;
+                    sensor.setAuraLedConfig(Grow::FingerprintSensor::LED_CTRL_ON, 0, Grow::FingerprintSensor::LED_COLOR_BLUE, 1, &sensor_confirmation_code);
+                    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                    std::cout << "Capturing second image..." << std::endl;
+                    driver_status = sensor.generateImage(&sensor_confirmation_code);
+                    if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+                        std::cerr << "Enrollment failed: GetImage (2) - Driver: 0x"
+                                  << std::hex << (int)driver_status << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status)
+                                  << "), Sensor: 0x" << (int)sensor_confirmation_code << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
+                        ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+                    } else {
+                        std::cout << "Second image captured successfully. Generating template for CharBuffer2..." << std::endl;
+                        driver_status = sensor.imageToTemplate(0x02, &sensor_confirmation_code);
+                        if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+                            std::cerr << "Enrollment failed: Img2Tz (2) - Driver: 0x"
+                                      << std::hex << (int)driver_status << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status)
+                                      << "), Sensor: 0x" << (int)sensor_confirmation_code << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
+                            ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+                        } else {
+                            std::cout << "Template for CharBuffer2 generated. Creating combined template..." << std::endl;
+                            sensor.setAuraLedConfig(Grow::FingerprintSensor::LED_CTRL_OFF, 0, 0, 0, &sensor_confirmation_code);
+                            driver_status = sensor.createTemplate(&sensor_confirmation_code);
+                            if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+                                std::cerr << "Enrollment failed: CreateTemplate - Driver: 0x"
+                                          << std::hex << (int)driver_status << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status)
+                                          << "), Sensor: 0x" << (int)sensor_confirmation_code << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
+                                if (sensor_confirmation_code == R502A_CONF_FINGER_NOMATCH) {
+                                    std::cerr << "Note: The two fingerprints did not match. Please try again with the same finger." << std::endl;
+                                }
+                                ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+                            } else {
+                                std::cout << "Combined template created successfully. Storing to Page ID " << page_id << "..." << std::endl;
+                                driver_status = sensor.storeTemplate(0x01, page_id, &sensor_confirmation_code);
+                                if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+                                    std::cerr << "Enrollment failed: StoreTemplate - Driver: 0x"
+                                              << std::hex << (int)driver_status << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status)
+                                              << "), Sensor: 0x" << (int)sensor_confirmation_code << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
+                                    ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+                                } else {
+                                    std::cout << "Fingerprint successfully enrolled and stored at Page ID " << page_id << "!" << std::endl;
+                                    ret = R502A_CONF_OK;
+                                    // Flash green LED for success
+                                    sensor.setAuraLedConfig(Grow::FingerprintSensor::LED_CTRL_FLASHING, 150, Grow::FingerprintSensor::LED_COLOR_GREEN, 3, &sensor_confirmation_code);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // Check the return code, if it's an error, flash red LED
+            if (ret != R502A_CONF_OK) {
+                sensor.setAuraLedConfig(Grow::FingerprintSensor::LED_CTRL_FLASHING, 150, Grow::FingerprintSensor::LED_COLOR_RED, 3, &sensor_confirmation_code);
+                std::cerr << "Enrollment process failed with code: 0x" << std::hex << (int)ret
+                          << " (" << Grow::FingerprintSensor::errorCodeToString(ret) << ")" << std::endl;
+            } else {
+                std::cout << "Enrollment completed successfully." << std::endl;
+            }
+        }
+    } else if (strcmp(command_str, "verify") == 0) {
+        std::cout << "Starting fingerprint verification..." << std::endl;
+        uint8_t sensor_confirmation_code;
+        uint8_t driver_status = sensor.generateImage(&sensor_confirmation_code);
+        if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+            std::cerr << "Verification failed: GetImage - Driver: 0x"
+                      << std::hex << (int)driver_status << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status)
+                      << "), Sensor: 0x" << (int)sensor_confirmation_code << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
+            ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+        } else {
+            std::cout << "Image captured successfully. Converting to template..." << std::endl;
+            driver_status = sensor.imageToTemplate(0x01, &sensor_confirmation_code);
+            if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
+                std::cerr << "Verification failed: Img2Tz - Driver: 0x"
+                          << std::hex << (int)driver_status << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status)
+                          << "), Sensor: 0x" << (int)sensor_confirmation_code << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
+                ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+            } else {
+                std::cout << "Template generated successfully. Searching in library..." << std::endl;
+                for(uint16_t page_id = 0; page_id < 200; page_id += 10) {
+                    uint8_t buffer_id = 0x01;
+                    r502a_search_result_t search_result;
+                    driver_status = sensor.searchFingerprint(buffer_id, page_id, page_id + 10, search_result);
+                    if (driver_status == R502A_CONF_OK) {
+                        std::cout << "Fingerprint verified successfully! Found at Page ID " << search_result.page_id << "." << std::endl;
+                        std::cout << "Match Score: " << search_result.match_score << std::endl;
+                        ret = R502A_CONF_OK;
+                        sensor.setAuraLedConfig(Grow::FingerprintSensor::LED_CTRL_FLASHING, 150, Grow::FingerprintSensor::LED_COLOR_GREEN, 3, &sensor_confirmation_code);
+                        break; // Exit loop on successful verification
+                    } else {
+                        std::cerr << "Verification failed: Search - Driver: 0x"
+                                << std::hex << (int)driver_status << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status)
+                                << "), Sensor: 0x" << (int)sensor_confirmation_code << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
+                        ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
+                    }
+                }
+            }
+        }
+        // Check the return code, if it's an error, flash red LED
+        if (ret != R502A_CONF_OK) {
+            sensor.setAuraLedConfig(Grow::FingerprintSensor::LED_CTRL_FLASHING, 150, Grow::FingerprintSensor::LED_COLOR_RED, 3, &sensor_confirmation_code);
+            std::cerr << "Verification process failed with code: 0x" << std::hex << (int)ret
+                      << " (" << Grow::FingerprintSensor::errorCodeToString(ret) << ")" << std::endl;
+        } else {
+            std::cout << "Verification completed successfully." << std::endl;
+        }
     }
     // Add other command handlers here
     else {
