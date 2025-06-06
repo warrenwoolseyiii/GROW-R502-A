@@ -176,6 +176,7 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "  setled <ctrl> <speed> <color> <count> (configures Aura LED; e.g., setled 1 200 2 0 for blue breathing)\n");
         fprintf(stderr, "  enroll <page_id> (interactive enrollment to specified page ID)\n");
         fprintf(stderr, "  verify (verify fingerprint against stored templates)\n");
+        fprintf(stderr, "  empty (erase all stored fingerprints from the device)\n");
         // Add more commands as they are tested
         return 1;
     }
@@ -448,11 +449,17 @@ int main(int argc, char* argv[]) {
         } else {
             printf("Verification completed successfully.\n");
         }
+    } else if (strcmp(command, "empty") == 0) {
+        printf("Erasing all stored fingerprints from the device...\n");
+        uint8_t driver_status = r502a_empty_fingerprint_library(&sensor_handle);
+        if (driver_status == R502A_CONF_OK) {
+            printf("All fingerprints erased successfully.\n");
+            ret = R502A_CONF_OK;
+        } else {
+            fprintf(stderr, "Failed to erase fingerprints: 0x%02X (%s)\n", driver_status, r502a_error_code_to_string(driver_status));
+            ret = driver_status;
+        }
     }
-    // Add other command handlers here:
-    // else if (strcmp(command, "search") == 0) { ... }
-    // else if (strcmp(command, "delete") == 0) { ... }
-    // else if (strcmp(command, "empty") == 0) { ... }
     else {
         fprintf(stderr, "Unknown command: %s\n", command);
         ret = R502A_ERR_INVALID_ARGS; // Using a driver error code for unknown app command
