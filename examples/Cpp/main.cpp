@@ -1,15 +1,15 @@
 #include <iostream>
 #include <iomanip> // For std::hex, std::setw, std::setfill
-#include <cstdlib>  // For strtoul, atoi
-#include <cstring>  // For strcmp
+#include <cstdlib> // For strtoul, atoi
+#include <cstring> // For strcmp
 
 // POSIX UART specific
 #include <termios.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <cerrno>  // For errno, EAGAIN, EWOULDBLOCK
-#include <cstdio>  // For perror, fprintf, stderr
-#include <ctime>   // For time()
+#include <cerrno> // For errno, EAGAIN, EWOULDBLOCK
+#include <cstdio> // For perror, fprintf, stderr
+#include <ctime>  // For time()
 
 
 #include "../../lib/Cpp/FingerprintSensor.hpp"
@@ -24,8 +24,11 @@
 
 static int uart_fd_cpp = -1;
 
-extern "C" int uart_posix_write_cpp(const uint8_t* data, uint16_t length) {
-    if (uart_fd_cpp == -1) return -1;
+extern "C" int uart_posix_write_cpp(const uint8_t *data, uint16_t length)
+{
+    if (uart_fd_cpp == -1) {
+        return -1;
+    }
     ssize_t written = write(uart_fd_cpp, data, length);
     if (written < 0) {
         perror("UART (cpp) write error");
@@ -38,13 +41,16 @@ extern "C" int uart_posix_write_cpp(const uint8_t* data, uint16_t length) {
     return 0; // Success
 }
 
-extern "C" int uart_posix_read_cpp(uint8_t* buffer, uint16_t length, uint32_t timeout_ms) {
-    if (uart_fd_cpp == -1) return -1;
-    
-    ssize_t bytes_read = 0;
+extern "C" int uart_posix_read_cpp(uint8_t *buffer, uint16_t length, uint32_t timeout_ms)
+{
+    if (uart_fd_cpp == -1) {
+        return -1;
+    }
+
+    ssize_t  bytes_read = 0;
     uint16_t total_read = 0;
     // Using a simple select-based timeout for potentially better responsiveness
-    fd_set read_fds;
+    fd_set         read_fds;
     struct timeval tv;
 
     FD_ZERO(&read_fds);
@@ -54,7 +60,7 @@ extern "C" int uart_posix_read_cpp(uint8_t* buffer, uint16_t length, uint32_t ti
     tv.tv_usec = (timeout_ms % 1000) * 1000;
 
     // Try to read 'length' bytes
-    while(total_read < length) {
+    while (total_read < length) {
         int retval = select(uart_fd_cpp + 1, &read_fds, NULL, NULL, &tv);
         if (retval == -1) {
             perror("select() error in uart_posix_read_cpp");
@@ -64,11 +70,11 @@ extern "C" int uart_posix_read_cpp(uint8_t* buffer, uint16_t length, uint32_t ti
             if (bytes_read > 0) {
                 total_read += bytes_read;
             } else if (bytes_read == 0) { // Should not happen if select indicated data
-                break; 
-            } else { // bytes_read < 0
-                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                     continue; // Should not happen with select, but good practice
-                 }
+                break;
+            } else {                      // bytes_read < 0
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    continue;             // Should not happen with select, but good practice
+                }
                 perror("UART (cpp) read error after select");
                 return -1;
             }
@@ -92,7 +98,8 @@ extern "C" int uart_posix_read_cpp(uint8_t* buffer, uint16_t length, uint32_t ti
     return total_read;
 }
 
-int uart_posix_open_cpp(const char* port_name, int baud_rate_val) {
+int uart_posix_open_cpp(const char *port_name, int baud_rate_val)
+{
     uart_fd_cpp = open(port_name, O_RDWR | O_NOCTTY | O_NDELAY);
     if (uart_fd_cpp == -1) {
         perror("Error opening serial port (cpp)");
@@ -142,14 +149,16 @@ int uart_posix_open_cpp(const char* port_name, int baud_rate_val) {
     return 0;
 }
 
-void uart_posix_close_cpp() {
+void uart_posix_close_cpp()
+{
     if (uart_fd_cpp != -1) {
         close(uart_fd_cpp);
         uart_fd_cpp = -1;
     }
 }
 
-void print_system_params_cpp(const r502a_system_params_t& params) {
+void print_system_params_cpp(const r502a_system_params_t &params)
+{
     std::cout << "System Parameters (C++ Example):\n"
               << "  Status Register:         0x" << std::hex << std::setw(4) << std::setfill('0') << params.status_register << "\n"
               << "  System Identifier Code:  0x" << std::hex << std::setw(4) << std::setfill('0') << params.system_identifier_code << "\n"
@@ -163,7 +172,8 @@ void print_system_params_cpp(const r502a_system_params_t& params) {
 }
 
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[])
+{
     if (argc < 3) {
         std::cerr << "Usage: " << argv[0] << " <serial_port> <command> [args...]\n"
                   << "Commands:\n"
@@ -176,20 +186,20 @@ int main(int argc, char* argv[]) {
                   << "  storetpl <buffer_id(1 or 2)> <page_id> (calls FingerprintSensor::storeTemplate)\n"
                   << "  setled <ctrl> <speed> <color> <count> (configures Aura LED; e.g., setled 1 200 2 0 for blue breathing)\n"
                   << "  empty (erase all stored fingerprints from the device)\n"
-                  // Add more commands
+            // Add more commands
                   << std::endl;
         return 1;
     }
 
-    const char* port = argv[1];
-    const char* command_str = argv[2];
+    const char *port = argv[1];
+    const char *command_str = argv[2];
 
     if (uart_posix_open_cpp(port, 57600) != 0) {
         return 1;
     }
 
     Grow::FingerprintSensor sensor(R502A_DEFAULT_ADDRESS, uart_posix_write_cpp, uart_posix_read_cpp);
-    
+
     uint8_t ret = sensor.init(); // Initialize (checks UART functions)
     if (ret != R502A_CONF_OK) {
         std::cerr << "Failed to initialize FingerprintSensor object: 0x"
@@ -273,7 +283,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "Usage: " << argv[0] << " " << port << " storetpl <buffer_id(1 or 2)> <page_id>\n";
             ret = R502A_ERR_INVALID_ARGS;
         } else {
-            uint8_t buffer_id = (uint8_t)atoi(argv[3]);
+            uint8_t  buffer_id = (uint8_t)atoi(argv[3]);
             uint16_t page_id = (uint16_t)atoi(argv[4]);
             std::cout << "Storing template from buffer " << (int)buffer_id << " to page " << page_id
                       << " (calls FingerprintSensor::storeTemplate)...\n";
@@ -309,7 +319,7 @@ int main(int argc, char* argv[]) {
 
             uint8_t sensor_confirmation_code;
             uint8_t driver_status = sensor.setAuraLedConfig(ctrl, speed, color, count, &sensor_confirmation_code);
-            
+
             if (driver_status == R502A_CONF_OK) {
                 std::cout << "Set LED - Sensor response: 0x" << std::hex << (int)sensor_confirmation_code
                           << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
@@ -345,7 +355,7 @@ int main(int argc, char* argv[]) {
             // --- First Scan ---
             std::cout << "Step 1: Place your finger on the sensor for the FIRST scan, then press Enter." << std::endl;
             sensor.setAuraLedConfig(Grow::FingerprintSensor::LED_CTRL_ON, 0, Grow::FingerprintSensor::LED_COLOR_BLUE, 1, &sensor_confirmation_code);
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            std::cin.ignore(std::numeric_limits <std::streamsize>::max(), '\n');
             std::cout << "Capturing first image..." << std::endl;
             driver_status = sensor.generateImage(&sensor_confirmation_code);
             if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
@@ -369,7 +379,7 @@ int main(int argc, char* argv[]) {
                     // --- Second Scan ---
                     std::cout << "Step 2: Place the SAME finger on the sensor for the SECOND scan, then press Enter." << std::endl;
                     sensor.setAuraLedConfig(Grow::FingerprintSensor::LED_CTRL_ON, 0, Grow::FingerprintSensor::LED_COLOR_BLUE, 1, &sensor_confirmation_code);
-                    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                    std::cin.ignore(std::numeric_limits <std::streamsize>::max(), '\n');
                     std::cout << "Capturing second image..." << std::endl;
                     driver_status = sensor.generateImage(&sensor_confirmation_code);
                     if (driver_status != R502A_CONF_OK || sensor_confirmation_code != R502A_CONF_OK) {
@@ -444,7 +454,7 @@ int main(int argc, char* argv[]) {
                 ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
             } else {
                 std::cout << "Template generated successfully. Searching in library..." << std::endl;
-                for(uint16_t page_id = 0; page_id < 200; page_id += 10) {
+                for (uint16_t page_id = 0; page_id < 200; page_id += 10) {
                     uint8_t buffer_id = 0x01;
                     r502a_search_result_t search_result;
                     driver_status = sensor.searchFingerprint(buffer_id, page_id, page_id + 10, search_result);
@@ -456,8 +466,8 @@ int main(int argc, char* argv[]) {
                         break; // Exit loop on successful verification
                     } else {
                         std::cerr << "Verification failed: Search - Driver: 0x"
-                                << std::hex << (int)driver_status << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status)
-                                << "), Sensor: 0x" << (int)sensor_confirmation_code << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
+                                  << std::hex << (int)driver_status << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status)
+                                  << "), Sensor: 0x" << (int)sensor_confirmation_code << " (" << Grow::FingerprintSensor::errorCodeToString(sensor_confirmation_code) << ")" << std::endl;
                         ret = (driver_status != R502A_CONF_OK) ? driver_status : sensor_confirmation_code;
                     }
                 }
@@ -481,9 +491,9 @@ int main(int argc, char* argv[]) {
     uart_posix_close_cpp();
     // Adjust return logic: 0 for R502A_CONF_OK, 1 for any other driver/sensor code.
     // The initial `ret = 0xFF` or `ret = 1` for arg errors should also lead to exit 1.
-    if (ret == R502A_ERR_INVALID_ARGS && (strcmp(command_str, "verifypwd") == 0 || strcmp(command_str, "img2tz") == 0 || strcmp(command_str, "storetpl") == 0 || strcmp(command_str, "setled") == 0 || strcmp(command_str, "unknown") == 0) ) {
-         // For arg errors detected in main before calling driver, or unknown command
-         return 1;
+    if (ret == R502A_ERR_INVALID_ARGS && (strcmp(command_str, "verifypwd") == 0 || strcmp(command_str, "img2tz") == 0 || strcmp(command_str, "storetpl") == 0 || strcmp(command_str, "setled") == 0 || strcmp(command_str, "unknown") == 0)) {
+        // For arg errors detected in main before calling driver, or unknown command
+        return 1;
     }
     return (ret == R502A_CONF_OK) ? 0 : 1;
 }

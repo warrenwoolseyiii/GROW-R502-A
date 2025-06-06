@@ -14,11 +14,11 @@
 
 
 namespace Grow {
-
 FingerprintSensor::FingerprintSensor(uint32_t device_address,
                                      r502a_uart_write_fn write_uart_fn,
                                      r502a_uart_read_fn read_uart_fn)
-    : initialized_(false) {
+    : initialized_(false)
+{
     sensor_handle_.device_address = device_address;
     sensor_handle_.write_uart = write_uart_fn;
     sensor_handle_.read_uart = read_uart_fn;
@@ -27,7 +27,8 @@ FingerprintSensor::FingerprintSensor(uint32_t device_address,
     // We can consider the C++ object constructed as "handle ready".
 }
 
-uint8_t FingerprintSensor::init() {
+uint8_t FingerprintSensor::init()
+{
     // The C r502a_init function primarily assigns the members of the handle.
     // Our constructor already does this.
     // If r502a_init had more complex logic (e.g., initial handshake, checks),
@@ -41,24 +42,36 @@ uint8_t FingerprintSensor::init() {
     return R502A_CONF_OK;
 }
 
-uint8_t FingerprintSensor::handshake() {
-    if (!initialized_) return R502A_CONF_ERR_RECV; // Indicate not initialized
+uint8_t FingerprintSensor::handshake()
+{
+    if (!initialized_) {
+        return R502A_CONF_ERR_RECV; // Indicate not initialized
+    }
     return r502a_handshake(&sensor_handle_);
 }
 
-uint8_t FingerprintSensor::verifyPassword(uint32_t password) {
-    if (!initialized_) return R502A_CONF_ERR_RECV;
+uint8_t FingerprintSensor::verifyPassword(uint32_t password)
+{
+    if (!initialized_) {
+        return R502A_CONF_ERR_RECV;
+    }
     return r502a_verify_password(&sensor_handle_, password);
 }
 
-uint8_t FingerprintSensor::readSystemParameters(r502a_system_params_t& params) {
-    if (!initialized_) return R502A_CONF_ERR_RECV;
+uint8_t FingerprintSensor::readSystemParameters(r502a_system_params_t &params)
+{
+    if (!initialized_) {
+        return R502A_CONF_ERR_RECV;
+    }
     return r502a_read_system_parameters(&sensor_handle_, &params);
 }
 
-uint8_t FingerprintSensor::generateImage(uint8_t* confirmationCode) {
+uint8_t FingerprintSensor::generateImage(uint8_t *confirmationCode)
+{
     if (!initialized_) {
-        if (confirmationCode) *confirmationCode = 0xFF; // Undefined
+        if (confirmationCode) {
+            *confirmationCode = 0xFF;     // Undefined
+        }
         return R502A_ERR_NOT_INITIALIZED; // Or a more C++ specific error
     }
     if (!confirmationCode) {
@@ -67,9 +80,12 @@ uint8_t FingerprintSensor::generateImage(uint8_t* confirmationCode) {
     return r502a_generate_image(&sensor_handle_, confirmationCode);
 }
 
-uint8_t FingerprintSensor::imageToTemplate(uint8_t bufferId, uint8_t* confirmationCode) {
+uint8_t FingerprintSensor::imageToTemplate(uint8_t bufferId, uint8_t *confirmationCode)
+{
     if (!initialized_) {
-        if (confirmationCode) *confirmationCode = 0xFF;
+        if (confirmationCode) {
+            *confirmationCode = 0xFF;
+        }
         return R502A_ERR_NOT_INITIALIZED;
     }
     if (!confirmationCode) {
@@ -79,9 +95,12 @@ uint8_t FingerprintSensor::imageToTemplate(uint8_t bufferId, uint8_t* confirmati
     return r502a_image_to_template(&sensor_handle_, bufferId, confirmationCode);
 }
 
-uint8_t FingerprintSensor::createTemplate(uint8_t* confirmationCode) {
+uint8_t FingerprintSensor::createTemplate(uint8_t *confirmationCode)
+{
     if (!initialized_) {
-        if (confirmationCode) *confirmationCode = 0xFF;
+        if (confirmationCode) {
+            *confirmationCode = 0xFF;
+        }
         return R502A_ERR_NOT_INITIALIZED;
     }
     if (!confirmationCode) {
@@ -90,9 +109,12 @@ uint8_t FingerprintSensor::createTemplate(uint8_t* confirmationCode) {
     return r502a_create_template(&sensor_handle_, confirmationCode);
 }
 
-uint8_t FingerprintSensor::storeTemplate(uint8_t bufferId, uint16_t pageId, uint8_t* confirmationCode) {
+uint8_t FingerprintSensor::storeTemplate(uint8_t bufferId, uint16_t pageId, uint8_t *confirmationCode)
+{
     if (!initialized_) {
-        if (confirmationCode) *confirmationCode = 0xFF;
+        if (confirmationCode) {
+            *confirmationCode = 0xFF;
+        }
         return R502A_ERR_NOT_INITIALIZED;
     }
     if (!confirmationCode) {
@@ -102,18 +124,27 @@ uint8_t FingerprintSensor::storeTemplate(uint8_t bufferId, uint16_t pageId, uint
     return r502a_store_template(&sensor_handle_, bufferId, pageId, confirmationCode);
 }
 
-uint8_t FingerprintSensor::searchFingerprint(uint8_t buffer_id, uint16_t start_page, uint16_t num_pages, r502a_search_result_t& result) {
-    if (!initialized_) return R502A_CONF_ERR_RECV;
+uint8_t FingerprintSensor::searchFingerprint(uint8_t buffer_id, uint16_t start_page, uint16_t num_pages, r502a_search_result_t &result)
+{
+    if (!initialized_) {
+        return R502A_CONF_ERR_RECV;
+    }
     return r502a_search_fingerprint(&sensor_handle_, buffer_id, start_page, num_pages, &result);
 }
 
-uint8_t FingerprintSensor::deleteTemplate(uint16_t start_page, uint16_t num_to_delete) {
-    if (!initialized_) return R502A_CONF_ERR_RECV;
+uint8_t FingerprintSensor::deleteTemplate(uint16_t start_page, uint16_t num_to_delete)
+{
+    if (!initialized_) {
+        return R502A_CONF_ERR_RECV;
+    }
     return r502a_delete_template(&sensor_handle_, start_page, num_to_delete);
 }
 
-uint8_t FingerprintSensor::emptyFingerprintLibrary() {
-    if (!initialized_) return R502A_CONF_ERR_RECV;
+uint8_t FingerprintSensor::emptyFingerprintLibrary()
+{
+    if (!initialized_) {
+        return R502A_CONF_ERR_RECV;
+    }
     return r502a_empty_fingerprint_library(&sensor_handle_);
 }
 
@@ -121,9 +152,12 @@ uint8_t FingerprintSensor::setAuraLedConfig(uint8_t ctrl_code,
                                             uint8_t speed,
                                             uint8_t color_index,
                                             uint8_t count,
-                                            uint8_t* confirmationCode) {
+                                            uint8_t *confirmationCode)
+{
     if (!initialized_) {
-        if (confirmationCode) *confirmationCode = 0xFF; // Undefined
+        if (confirmationCode) {
+            *confirmationCode = 0xFF; // Undefined
+        }
         return R502A_ERR_NOT_INITIALIZED;
     }
     if (!confirmationCode) {
@@ -134,7 +168,8 @@ uint8_t FingerprintSensor::setAuraLedConfig(uint8_t ctrl_code,
     return r502a_set_aura_led_config(&sensor_handle_, ctrl_code, speed, color_index, count, confirmationCode);
 }
 
-const char* FingerprintSensor::errorCodeToString(uint8_t errorCode) {
+const char * FingerprintSensor::errorCodeToString(uint8_t errorCode)
+{
     return r502a_error_code_to_string(errorCode);
 }
 
@@ -156,6 +191,4 @@ const char* FingerprintSensor::errorCodeToString(uint8_t errorCode) {
 //     // For brevity in this step, we are directly calling the C API functions.
 //     return R502A_CONF_ERR_RECV; // Placeholder
 // }
-
-
 } // namespace Grow

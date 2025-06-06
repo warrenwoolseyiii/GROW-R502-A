@@ -5,8 +5,10 @@
 
 // Calculates the 2-byte checksum for a packet.
 // Sum of: PID + Length + Content
-static uint16_t calculate_checksum(const uint8_t* buffer, uint16_t length) {
+static uint16_t calculate_checksum(const uint8_t *buffer, uint16_t length)
+{
     uint16_t sum = 0;
+
     for (uint16_t i = 0; i < length; i++) {
         sum += buffer[i];
     }
@@ -15,16 +17,17 @@ static uint16_t calculate_checksum(const uint8_t* buffer, uint16_t length) {
 
 // Sends a command packet and receives an acknowledge packet.
 // This is a simplified version; more robust error handling and data packet handling will be added.
-static uint8_t send_command_and_receive_ack(r502a_handle_t* handle, uint8_t cmd_code,
-                                            const uint8_t* params, uint16_t params_len,
-                                            uint8_t* ack_params, uint16_t* ack_params_len) {
+static uint8_t send_command_and_receive_ack(r502a_handle_t *handle, uint8_t cmd_code,
+                                            const uint8_t *params, uint16_t params_len,
+                                            uint8_t *ack_params, uint16_t *ack_params_len)
+{
     // Pre-condition check (already done by public API functions, but good for internal safety)
     if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
         return R502A_ERR_NOT_INITIALIZED;
     }
 
-    uint8_t tx_buffer[256]; // Max packet size
-    uint8_t rx_buffer[256]; // Max packet size
+    uint8_t  tx_buffer[256]; // Max packet size
+    uint8_t  rx_buffer[256]; // Max packet size
     uint16_t packet_idx = 0;
 
     // 1. Construct Command Packet
@@ -69,7 +72,7 @@ static uint8_t send_command_and_receive_ack(r502a_handle_t* handle, uint8_t cmd_
     // 3. Receive Acknowledge Packet
     // Read Header, Address, PID, Length fields first (9 bytes)
     int bytes_read = handle->read_uart(rx_buffer, 9, 1000); // 1s timeout
-    if (bytes_read == -1) { // UART read function indicates error (e.g. port closed, system error)
+    if (bytes_read == -1) {                                 // UART read function indicates error (e.g. port closed, system error)
         return R502A_ERR_UART_READ_FAIL;
     }
     if (bytes_read < 9) { // Not enough bytes for header, likely timeout from sensor perspective
@@ -94,8 +97,8 @@ static uint8_t send_command_and_receive_ack(r502a_handle_t* handle, uint8_t cmd_
 
     uint16_t ack_package_fields_len = ((uint16_t)rx_buffer[7] << 8) | rx_buffer[8]; // Length of (Content + Checksum)
 
-    if (ack_package_fields_len < 3) { // Min content is 1 byte (ConfCode) + 2 bytes (Checksum)
-        return R502A_ERR_INVALID_ACK_PACKET; // Invalid package length (too short)
+    if (ack_package_fields_len < 3) {                                               // Min content is 1 byte (ConfCode) + 2 bytes (Checksum)
+        return R502A_ERR_INVALID_ACK_PACKET;                                        // Invalid package length (too short)
     }
     if (9 + ack_package_fields_len > sizeof(rx_buffer)) {
         return R502A_ERR_INVALID_ACK_PACKET; // Packet too large for our buffer
@@ -127,8 +130,8 @@ static uint8_t send_command_and_receive_ack(r502a_handle_t* handle, uint8_t cmd_
     // 6. Extract Parameters from ACK (if any)
     uint16_t ack_content_len = ack_package_fields_len - 2; // Total content length (ConfCode + Params)
     uint16_t actual_ack_params_len = 0;
-    if (ack_content_len > 1) { // If there's more than just the confirmation code
-        actual_ack_params_len = ack_content_len - 1; // Number of parameter bytes in the ACK
+    if (ack_content_len > 1) {                             // If there's more than just the confirmation code
+        actual_ack_params_len = ack_content_len - 1;       // Number of parameter bytes in the ACK
     }
 
     if (ack_params != NULL && ack_params_len != NULL) {
@@ -138,7 +141,7 @@ static uint8_t send_command_and_receive_ack(r502a_handle_t* handle, uint8_t cmd_
             if (actual_ack_params_len > 0) {
                 memcpy(ack_params, &rx_buffer[10], actual_ack_params_len); // Params start after ConfCode
             }
-            *ack_params_len = actual_ack_params_len; // Report how many bytes were actually in the ACK params
+            *ack_params_len = actual_ack_params_len;                       // Report how many bytes were actually in the ACK params
         } else {
             // Buffer is too small for all received parameters.
             *ack_params_len = 0; // Report 0 bytes copied.
@@ -153,7 +156,7 @@ static uint8_t send_command_and_receive_ack(r502a_handle_t* handle, uint8_t cmd_
         *ack_params_len = actual_ack_params_len;
     }
     // If both ack_params and ack_params_len are NULL, we do nothing and ignore received parameters.
-    
+
     // A stricter check could be added here: if the command *always* expects a certain number
     // of ack parameters, and actual_ack_params_len doesn't match, return R502A_ERR_ACK_UNEXPECTED_LEN,
     // even if the confirmation_code was OK. This is deferred for now as it requires command-specific knowledge.
@@ -164,8 +167,9 @@ static uint8_t send_command_and_receive_ack(r502a_handle_t* handle, uint8_t cmd_
 
 // --- Public API Implementations ---
 
-uint8_t r502a_init(r502a_handle_t* handle, uint32_t device_addr,
-                   r502a_uart_write_fn write_func, r502a_uart_read_fn read_func) {
+uint8_t r502a_init(r502a_handle_t *handle, uint32_t device_addr,
+                   r502a_uart_write_fn write_func, r502a_uart_read_fn read_func)
+{
     if (handle == NULL) {
         return R502A_ERR_INVALID_ARGS; // Handle cannot be null
     }
@@ -180,7 +184,8 @@ uint8_t r502a_init(r502a_handle_t* handle, uint32_t device_addr,
     return R502A_CONF_OK;
 }
 
-uint8_t r502a_handshake(r502a_handle_t* handle) {
+uint8_t r502a_handshake(r502a_handle_t *handle)
+{
     if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
         return R502A_ERR_NOT_INITIALIZED;
     }
@@ -192,7 +197,8 @@ uint8_t r502a_handshake(r502a_handle_t* handle) {
     return send_command_and_receive_ack(handle, R502A_CMD_HANDSHAKE, NULL, 0, NULL, NULL);
 }
 
-uint8_t r502a_read_system_parameters(r502a_handle_t* handle, r502a_system_params_t* params) {
+uint8_t r502a_read_system_parameters(r502a_handle_t *handle, r502a_system_params_t *params)
+{
     if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
         return R502A_ERR_NOT_INITIALIZED;
     }
@@ -200,28 +206,28 @@ uint8_t r502a_read_system_parameters(r502a_handle_t* handle, r502a_system_params
         return R502A_ERR_INVALID_ARGS;
     }
 
-    uint8_t ack_raw_params[16]; // Datasheet: ACK returns 16 bytes of parameters
+    uint8_t  ack_raw_params[16]; // Datasheet: ACK returns 16 bytes of parameters
     uint16_t ack_raw_params_len = sizeof(ack_raw_params);
 
     uint8_t confirmation_code = send_command_and_receive_ack(
         handle, R502A_CMD_READ_SYS_PARA, NULL, 0, ack_raw_params, &ack_raw_params_len
-    );
+        );
 
     if (confirmation_code == R502A_CONF_OK) {
         if (ack_raw_params_len == 16) {
             // Parse the 16 bytes into the struct (Big Endian)
             // Ref: Datasheet page 13, "Acknowledge package format" table
             // Offset (word) means offset in 2-byte words.
-            params->status_register         = ((uint16_t)ack_raw_params[0] << 8) | ack_raw_params[1];
-            params->system_identifier_code  = ((uint16_t)ack_raw_params[2] << 8) | ack_raw_params[3]; // Should be 0x0000
-            params->finger_library_size     = ((uint16_t)ack_raw_params[4] << 8) | ack_raw_params[5];
-            params->security_level          = ((uint16_t)ack_raw_params[6] << 8) | ack_raw_params[7];
-            params->device_address          = ((uint32_t)ack_raw_params[8] << 24) | \
-                                              ((uint32_t)ack_raw_params[9] << 16) | \
-                                              ((uint32_t)ack_raw_params[10] << 8) | \
-                                              ack_raw_params[11];
-            params->data_packet_size_code   = ((uint16_t)ack_raw_params[12] << 8) | ack_raw_params[13];
-            params->baud_rate_N             = ((uint16_t)ack_raw_params[14] << 8) | ack_raw_params[15];
+            params->status_register = ((uint16_t)ack_raw_params[0] << 8) | ack_raw_params[1];
+            params->system_identifier_code = ((uint16_t)ack_raw_params[2] << 8) | ack_raw_params[3]; // Should be 0x0000
+            params->finger_library_size = ((uint16_t)ack_raw_params[4] << 8) | ack_raw_params[5];
+            params->security_level = ((uint16_t)ack_raw_params[6] << 8) | ack_raw_params[7];
+            params->device_address = ((uint32_t)ack_raw_params[8] << 24) | \
+                                     ((uint32_t)ack_raw_params[9] << 16) | \
+                                     ((uint32_t)ack_raw_params[10] << 8) | \
+                                     ack_raw_params[11];
+            params->data_packet_size_code = ((uint16_t)ack_raw_params[12] << 8) | ack_raw_params[13];
+            params->baud_rate_N = ((uint16_t)ack_raw_params[14] << 8) | ack_raw_params[15];
         } else {
             // If confirmation code was OK, but we didn't get the expected 16 parameter bytes,
             // this is an unexpected ACK format from the sensor for this command.
@@ -231,7 +237,8 @@ uint8_t r502a_read_system_parameters(r502a_handle_t* handle, r502a_system_params
     return confirmation_code;
 }
 
-uint8_t r502a_verify_password(r502a_handle_t* handle, uint32_t password) {
+uint8_t r502a_verify_password(r502a_handle_t *handle, uint32_t password)
+{
     if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
         return R502A_ERR_NOT_INITIALIZED;
     }
@@ -247,9 +254,12 @@ uint8_t r502a_verify_password(r502a_handle_t* handle, uint32_t password) {
     return send_command_and_receive_ack(handle, R502A_CMD_VFY_PWD, params, 4, NULL, NULL);
 }
 
-uint8_t r502a_generate_image(r502a_handle_t* handle, uint8_t* confirmation_code) {
+uint8_t r502a_generate_image(r502a_handle_t *handle, uint8_t *confirmation_code)
+{
     if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
-        if (confirmation_code != NULL) *confirmation_code = 0xFF; // Undefined
+        if (confirmation_code != NULL) {
+            *confirmation_code = 0xFF; // Undefined
+        }
         return R502A_ERR_NOT_INITIALIZED;
     }
     if (confirmation_code == NULL) {
@@ -268,9 +278,12 @@ uint8_t r502a_generate_image(r502a_handle_t* handle, uint8_t* confirmation_code)
     return R502A_CONF_OK; // Driver operation successful, sensor status in *confirmation_code
 }
 
-uint8_t r502a_image_to_template(r502a_handle_t* handle, uint8_t buffer_id, uint8_t* confirmation_code) {
+uint8_t r502a_image_to_template(r502a_handle_t *handle, uint8_t buffer_id, uint8_t *confirmation_code)
+{
     if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
-        if (confirmation_code != NULL) *confirmation_code = 0xFF; // Undefined
+        if (confirmation_code != NULL) {
+            *confirmation_code = 0xFF; // Undefined
+        }
         return R502A_ERR_NOT_INITIALIZED;
     }
     if (confirmation_code == NULL) {
@@ -280,7 +293,9 @@ uint8_t r502a_image_to_template(r502a_handle_t* handle, uint8_t buffer_id, uint8
     // R502A_CHAR_BUFFER_1 and R502A_CHAR_BUFFER_2 should be defined in the header.
     // For now, assuming 0x01 and 0x02 are the valid values.
     if (buffer_id != 0x01 && buffer_id != 0x02) {
-         if (confirmation_code != NULL) *confirmation_code = 0xFF; // Undefined
+        if (confirmation_code != NULL) {
+            *confirmation_code = 0xFF; // Undefined
+        }
         return R502A_ERR_INVALID_ARGS;
     }
 
@@ -297,9 +312,12 @@ uint8_t r502a_image_to_template(r502a_handle_t* handle, uint8_t buffer_id, uint8
     return R502A_CONF_OK; // Driver operation successful, sensor status in *confirmation_code
 }
 
-uint8_t r502a_create_template(r502a_handle_t* handle, uint8_t* confirmation_code) {
+uint8_t r502a_create_template(r502a_handle_t *handle, uint8_t *confirmation_code)
+{
     if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
-        if (confirmation_code != NULL) *confirmation_code = 0xFF; // Undefined
+        if (confirmation_code != NULL) {
+            *confirmation_code = 0xFF; // Undefined
+        }
         return R502A_ERR_NOT_INITIALIZED;
     }
     if (confirmation_code == NULL) {
@@ -318,9 +336,12 @@ uint8_t r502a_create_template(r502a_handle_t* handle, uint8_t* confirmation_code
     return R502A_CONF_OK; // Driver operation successful, sensor status in *confirmation_code
 }
 
-uint8_t r502a_store_template(r502a_handle_t* handle, uint8_t buffer_id, uint16_t page_id, uint8_t* confirmation_code) {
+uint8_t r502a_store_template(r502a_handle_t *handle, uint8_t buffer_id, uint16_t page_id, uint8_t *confirmation_code)
+{
     if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
-        if (confirmation_code != NULL) *confirmation_code = 0xFF; // Undefined
+        if (confirmation_code != NULL) {
+            *confirmation_code = 0xFF; // Undefined
+        }
         return R502A_ERR_NOT_INITIALIZED;
     }
     if (confirmation_code == NULL) {
@@ -328,7 +349,9 @@ uint8_t r502a_store_template(r502a_handle_t* handle, uint8_t buffer_id, uint16_t
     }
     // Per datasheet for Store (0x06), BufferID is CharBuffer1 (0x01) or CharBuffer2 (0x02)
     if (buffer_id != 0x01 && buffer_id != 0x02) {
-        if (confirmation_code != NULL) *confirmation_code = 0xFF; // Undefined
+        if (confirmation_code != NULL) {
+            *confirmation_code = 0xFF; // Undefined
+        }
         return R502A_ERR_INVALID_ARGS;
     }
     // page_id range check could be added if library size is known, e.g. 0 to (finger_library_size - 1)
@@ -339,7 +362,7 @@ uint8_t r502a_store_template(r502a_handle_t* handle, uint8_t buffer_id, uint16_t
     uint8_t cmd_params[3];
     cmd_params[0] = buffer_id;
     cmd_params[1] = (page_id >> 8) & 0xFF; // PageID High Byte
-    cmd_params[2] = page_id & 0xFF;      // PageID Low Byte
+    cmd_params[2] = page_id & 0xFF;        // PageID Low Byte
 
     uint8_t status_from_sensor_or_driver = send_command_and_receive_ack(handle, R502A_CMD_STORE, cmd_params, sizeof(cmd_params), NULL, NULL);
     *confirmation_code = status_from_sensor_or_driver;
@@ -350,9 +373,10 @@ uint8_t r502a_store_template(r502a_handle_t* handle, uint8_t buffer_id, uint16_t
     return R502A_CONF_OK; // Driver operation successful, sensor status in *confirmation_code
 }
 
-uint8_t r502a_search_fingerprint(r502a_handle_t* handle, uint8_t buffer_id,
+uint8_t r502a_search_fingerprint(r502a_handle_t *handle, uint8_t buffer_id,
                                  uint16_t start_page, uint16_t num_pages,
-                                 r502a_search_result_t* result) {
+                                 r502a_search_result_t *result)
+{
     if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
         return R502A_ERR_NOT_INITIALIZED;
     }
@@ -366,20 +390,20 @@ uint8_t r502a_search_fingerprint(r502a_handle_t* handle, uint8_t buffer_id,
     uint8_t params[5];
     params[0] = buffer_id;
     params[1] = (start_page >> 8) & 0xFF; // StartID High Byte
-    params[2] = start_page & 0xFF;      // StartID Low Byte
+    params[2] = start_page & 0xFF;        // StartID Low Byte
     params[3] = (num_pages >> 8) & 0xFF;  // Num High Byte
-    params[4] = num_pages & 0xFF;       // Num Low Byte
+    params[4] = num_pages & 0xFF;         // Num Low Byte
 
-    uint8_t ack_raw_params[4]; // ACK returns PageID (2 bytes) + MatchScore (2 bytes)
+    uint8_t  ack_raw_params[4];           // ACK returns PageID (2 bytes) + MatchScore (2 bytes)
     uint16_t ack_raw_params_len = sizeof(ack_raw_params);
 
     uint8_t confirmation_code = send_command_and_receive_ack(
         handle, R502A_CMD_SEARCH, params, sizeof(params), ack_raw_params, &ack_raw_params_len
-    );
+        );
 
     if (confirmation_code == R502A_CONF_OK) { // Found a match
         if (ack_raw_params_len == 4) {
-            result->page_id    = ((uint16_t)ack_raw_params[0] << 8) | ack_raw_params[1];
+            result->page_id = ((uint16_t)ack_raw_params[0] << 8) | ack_raw_params[1];
             result->match_score = ((uint16_t)ack_raw_params[2] << 8) | ack_raw_params[3];
         } else {
             // If confirmation code was OK, but we didn't get the expected 4 parameter bytes,
@@ -395,16 +419,17 @@ uint8_t r502a_search_fingerprint(r502a_handle_t* handle, uint8_t buffer_id,
     return confirmation_code;
 }
 
-uint8_t r502a_delete_template(r502a_handle_t* handle, uint16_t start_page, uint16_t num_to_delete) {
+uint8_t r502a_delete_template(r502a_handle_t *handle, uint16_t start_page, uint16_t num_to_delete)
+{
     if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
         return R502A_ERR_NOT_INITIALIZED;
     }
 
     uint8_t params[4];
     params[0] = (start_page >> 8) & 0xFF;    // StartID High Byte
-    params[1] = start_page & 0xFF;         // StartID Low Byte
+    params[1] = start_page & 0xFF;           // StartID Low Byte
     params[2] = (num_to_delete >> 8) & 0xFF; // Num High Byte
-    params[3] = num_to_delete & 0xFF;      // Num Low Byte
+    params[3] = num_to_delete & 0xFF;        // Num Low Byte
 
     // DeletChar command has two parameters: StartID (2 bytes) and Num (2 bytes). Total 4 bytes.
     // The acknowledge packet contains only the confirmation code.
@@ -412,7 +437,8 @@ uint8_t r502a_delete_template(r502a_handle_t* handle, uint16_t start_page, uint1
     return send_command_and_receive_ack(handle, R502A_CMD_DELETE_CHAR, params, sizeof(params), NULL, NULL);
 }
 
-uint8_t r502a_empty_fingerprint_library(r502a_handle_t* handle) {
+uint8_t r502a_empty_fingerprint_library(r502a_handle_t *handle)
+{
     if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
         return R502A_ERR_NOT_INITIALIZED;
     }
@@ -423,14 +449,17 @@ uint8_t r502a_empty_fingerprint_library(r502a_handle_t* handle) {
     return send_command_and_receive_ack(handle, R502A_CMD_EMPTY, NULL, 0, NULL, NULL);
 }
 
-uint8_t r502a_set_aura_led_config(r502a_handle_t* handle,
+uint8_t r502a_set_aura_led_config(r502a_handle_t *handle,
                                   uint8_t ctrl_code,
                                   uint8_t speed,
                                   uint8_t color_index,
                                   uint8_t count,
-                                  uint8_t* confirmation_code) {
+                                  uint8_t *confirmation_code)
+{
     if (handle == NULL || handle->write_uart == NULL || handle->read_uart == NULL) {
-        if (confirmation_code != NULL) *confirmation_code = 0xFF; // Undefined
+        if (confirmation_code != NULL) {
+            *confirmation_code = 0xFF; // Undefined
+        }
         return R502A_ERR_NOT_INITIALIZED;
     }
     if (confirmation_code == NULL) {
@@ -454,7 +483,7 @@ uint8_t r502a_set_aura_led_config(r502a_handle_t* handle,
     // ACK contains only the confirmation code.
     uint8_t status_from_sensor_or_driver = send_command_and_receive_ack(
         handle, R502A_CMD_AURA_LED_CONFIG, cmd_params, sizeof(cmd_params), NULL, NULL
-    );
+        );
     *confirmation_code = status_from_sensor_or_driver;
 
     if (status_from_sensor_or_driver >= R502A_ERR_NOT_INITIALIZED) { // Check if it's a driver error
@@ -463,7 +492,8 @@ uint8_t r502a_set_aura_led_config(r502a_handle_t* handle,
     return R502A_CONF_OK; // Driver operation successful, sensor status in *confirmation_code
 }
 
-const char* r502a_error_code_to_string(uint8_t error_code) {
+const char * r502a_error_code_to_string(uint8_t error_code)
+{
     switch (error_code) {
         // Sensor Confirmation Codes
         case R502A_CONF_OK: return "OK (Command execution complete)";
@@ -496,7 +526,7 @@ const char* r502a_error_code_to_string(uint8_t error_code) {
         case R502A_ERR_ACK_UNEXPECTED_LEN: return "DRIVER_ERR_ACK_UNEXPECTED_LEN (ACK packet has an unexpected number of parameters)";
         case R502A_ERR_MALLOC_FAIL: return "DRIVER_ERR_MALLOC_FAIL (Memory allocation failed)";
         case R502A_ERR_INVALID_ARGS: return "DRIVER_ERR_INVALID_ARGS (Invalid arguments passed to a driver function)";
-        
+
         default: return "Unknown error code";
     }
 }
