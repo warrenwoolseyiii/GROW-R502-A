@@ -175,6 +175,7 @@ int main(int argc, char* argv[]) {
                   << "  createtpl (calls FingerprintSensor::createTemplate)\n"
                   << "  storetpl <buffer_id(1 or 2)> <page_id> (calls FingerprintSensor::storeTemplate)\n"
                   << "  setled <ctrl> <speed> <color> <count> (configures Aura LED; e.g., setled 1 200 2 0 for blue breathing)\n"
+                  << "  empty (erase all stored fingerprints from the device)\n"
                   // Add more commands
                   << std::endl;
         return 1;
@@ -318,6 +319,17 @@ int main(int argc, char* argv[]) {
                           << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status) << ")" << std::endl;
                 ret = driver_status;
             }
+        }
+    } else if (strcmp(command_str, "empty") == 0) {
+        std::cout << "Erasing all stored fingerprints from the device..." << std::endl;
+        uint8_t driver_status = sensor.emptyFingerprintLibrary();
+        if (driver_status == R502A_CONF_OK) {
+            std::cout << "All fingerprints erased successfully." << std::endl;
+            ret = R502A_CONF_OK;
+        } else {
+            std::cerr << "Failed to erase fingerprints: 0x" << std::hex << (int)driver_status
+                      << " (" << Grow::FingerprintSensor::errorCodeToString(driver_status) << ")" << std::endl;
+            ret = driver_status;
         }
     } else if (strcmp(command_str, "enroll") == 0) {
         if (argc < 4) {

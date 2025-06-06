@@ -46,7 +46,7 @@ def main():
     parser_deletetpl.add_argument("start_page", type=int, help="Starting page ID to delete from")
     parser_deletetpl.add_argument("num_to_delete", type=int, help="Number of templates to delete")
 
-    subparsers.add_parser("empty", help="Empty the entire fingerprint library")
+    subparsers.add_parser("empty", help="Erase all stored fingerprints from the device")
 
     parser_setled = subparsers.add_parser("setled", help="Configure Aura LED")
     parser_setled.add_argument("ctrl_code", type=int, help="Control code (e.g., 1:breathing, 2:flashing, 3:on, 4:off)")
